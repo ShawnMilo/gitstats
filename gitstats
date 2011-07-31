@@ -404,7 +404,7 @@ class GitDataCollector(DataCollector):
 
         # extensions
         lines = getpipeoutput(['git ls-tree -r -z %s' % getcommitrange('HEAD', end_only = True)]).split('\000')
-        self.total_files += len(lines)
+        
         for line in lines:
             if len(line) == 0:
                 continue
@@ -419,11 +419,18 @@ class GitDataCollector(DataCollector):
             except IndexError as ex:
                 ext = ''
                 
+            #skip extensions we aren't interested in
+            if len(ext) and len(conf['exclude_extensions']):
+                if ext in conf['exclude_extensions'].split(','):
+                    continue
+ 
             self.extensions[ext]['files'] += 1
             try:
                 self.extensions[ext]['lines'] += self.getLinesInBlob(sha1)
             except:
                 print 'Warning: Could not count lines for file "%s"' % line
+
+            self.total_files += 1
 
         # line statistics
         # outputs:
@@ -977,7 +984,12 @@ class HTMLReportCreator(ReportCreator):
         f.write('<dl>\n')
         f.write('<dt>Total files</dt><dd>%d</dd>' % data.getTotalFiles())
         f.write('<dt>Total lines</dt><dd>%d</dd>' % data.getTotalLOC())
-        f.write('<dt>Average file size</dt><dd>%.2f bytes</dd>' % ((100.0 * data.getTotalLOC()) / data.getTotalFiles()))
+        
+        try:
+            average_size = (100.0 * data.getTotalLOC()) / data.getTotalFiles()
+        except ZeroDivisionError as ex:
+            average_size = 0.0
+        f.write('<dt>Average file size</dt><dd>%.2f bytes</dd>' % (average_size))
         f.write('</dl>\n')
 
         # Files :: File count by date
@@ -1005,7 +1017,13 @@ class HTMLReportCreator(ReportCreator):
         for ext in sorted(data.extensions.keys()):
             files = data.extensions[ext]['files']
             lines = data.extensions[ext]['lines']
-            f.write('<tr><td>%s</td><td>%d (%.2f%%)</td><td>%d (%.2f%%)</td><td>%d</td></tr>' % (ext, files, (100.0 * files) / data.getTotalFiles(), lines, (100.0 * lines) / data.getTotalLOC(), lines / files))
+            
+            try:
+                ext_pct = (100.0 * files) / data.getTotalFiles()
+            except ZeroDivisionError as ex:
+                ext_pct = 0.0
+            
+            f.write('<tr><td>%s</td><td>%d (%.2f%%)</td><td>%d (%.2f%%)</td><td>%d</td></tr>' % (ext, files, ext_pct, lines, (100.0 * lines) / data.getTotalLOC(), lines / files))
         f.write('</table>')
 
         f.write('</body></html>')
