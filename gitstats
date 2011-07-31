@@ -691,7 +691,7 @@ class HTMLReportCreator(ReportCreator):
 
         # generate weeks to show (previous N weeks from now)
         now = datetime.now()
-        deltaweek = timedelta(7)
+        deltaweek = timedelta(days = 7)
         weeks = []
         stampcur = now
         for i in range(0, WEEKS):
