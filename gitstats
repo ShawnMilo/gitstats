@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # Copyright (c) 2007-2011 Heikki Hokkanen <hoxu@users.sf.net> & others (see doc/author.txt)
 # GPLv2 / GPLv3
-import datetime
+from datetime import datetime, timedelta
 import getopt
 import glob
 import os
@@ -195,10 +195,10 @@ class DataCollector:
         return []
     
     def getFirstCommitDate(self):
-        return datetime.datetime.now()
+        return datetime.now()
     
     def getLastCommitDate(self):
-        return datetime.datetime.now()
+        return datetime.now()
     
     def getStampCreated(self):
         return self.stamp_created
@@ -254,7 +254,7 @@ class GitDataCollector(DataCollector):
                     stamp = int(parts[0])
                 except ValueError:
                     stamp = 0
-                self.tags[tag] = { 'stamp': stamp, 'hash' : hash, 'date' : datetime.datetime.fromtimestamp(stamp).strftime('%Y-%m-%d'), 'commits': 0, 'authors': {} }
+                self.tags[tag] = { 'stamp': stamp, 'hash' : hash, 'date' : datetime.fromtimestamp(stamp).strftime('%Y-%m-%d'), 'commits': 0, 'authors': {} }
 
         # collect info on tags, starting from latest
         tags_sorted_by_date_desc = map(lambda el : el[1], reversed(sorted(map(lambda el : (el[1]['date'], el[0]), self.tags.items()))))
@@ -291,7 +291,7 @@ class GitDataCollector(DataCollector):
             domain = '?'
             if mail.find('@') != -1:
                 domain = mail.rsplit('@', 1)[1]
-            date = datetime.datetime.fromtimestamp(float(stamp))
+            date = datetime.fromtimestamp(float(stamp))
 
             # First and last commit stamp (may be in any order because of cherry-picking and patches)
             if stamp > self.last_commit_stamp:
@@ -531,8 +531,8 @@ class GitDataCollector(DataCollector):
         for name in self.authors.keys():
             a = self.authors[name]
             a['commits_frac'] = (100 * float(a['commits'])) / self.getTotalCommits()
-            date_first = datetime.datetime.fromtimestamp(a['first_commit_stamp'])
-            date_last = datetime.datetime.fromtimestamp(a['last_commit_stamp'])
+            date_first = datetime.fromtimestamp(a['first_commit_stamp'])
+            date_last = datetime.fromtimestamp(a['last_commit_stamp'])
             delta = date_last - date_first
             a['date_first'] = date_first.strftime('%Y-%m-%d')
             a['date_last'] = date_last.strftime('%Y-%m-%d')
@@ -578,10 +578,10 @@ class GitDataCollector(DataCollector):
         return res
 
     def getFirstCommitDate(self):
-        return datetime.datetime.fromtimestamp(self.first_commit_stamp)
+        return datetime.fromtimestamp(self.first_commit_stamp)
     
     def getLastCommitDate(self):
-        return datetime.datetime.fromtimestamp(self.last_commit_stamp)
+        return datetime.fromtimestamp(self.last_commit_stamp)
     
     def getLinesInBlob(self, sha1):
         try:
@@ -614,7 +614,7 @@ class GitDataCollector(DataCollector):
     
     def revToDate(self, rev):
         stamp = int(getpipeoutput(['git log --pretty=format:%%at "%s" -n 1' % rev]))
-        return datetime.datetime.fromtimestamp(stamp).strftime('%Y-%m-%d')
+        return datetime.fromtimestamp(stamp).strftime('%Y-%m-%d')
 
 class ReportCreator:
     """Creates the actual report based on given data."""
@@ -660,7 +660,7 @@ class HTMLReportCreator(ReportCreator):
 
         f.write('<dl>')
         f.write('<dt>Project name</dt><dd>%s</dd>' % (data.projectname))
-        f.write('<dt>Generated</dt><dd>%s (in %d seconds)</dd>' % (datetime.datetime.now().strftime(format), time.time() - data.getStampCreated()))
+        f.write('<dt>Generated</dt><dd>%s (in %d seconds)</dd>' % (datetime.now().strftime(format), time.time() - data.getStampCreated()))
         f.write('<dt>Generator</dt><dd><a href="http://gitstats.sourceforge.net/">GitStats</a> (version %s), %s, %s</dd>' % (getversion(), getgitversion(), getgnuplotversion()))
         f.write('<dt>Report Period</dt><dd>%s to %s</dd>' % (data.getFirstCommitDate().strftime(format), data.getLastCommitDate().strftime(format)))
         f.write('<dt>Age</dt><dd>%d days, %d active days (%3.2f%%)</dd>' % (data.getCommitDeltaDays(), len(data.getActiveDays()), (100.0 * len(data.getActiveDays()) / data.getCommitDeltaDays())))
@@ -690,8 +690,8 @@ class HTMLReportCreator(ReportCreator):
         f.write('<p>Last %d weeks</p>' % WEEKS)
 
         # generate weeks to show (previous N weeks from now)
-        now = datetime.datetime.now()
-        deltaweek = datetime.timedelta(7)
+        now = datetime.now()
+        deltaweek = timedelta(7)
         weeks = []
         stampcur = now
         for i in range(0, WEEKS):
@@ -986,13 +986,13 @@ class HTMLReportCreator(ReportCreator):
         # use set to get rid of duplicate/unnecessary entries
         files_by_date = set()
         for stamp in sorted(data.files_by_stamp.keys()):
-            files_by_date.add('%s %d' % (datetime.datetime.fromtimestamp(stamp).strftime('%Y-%m-%d'), data.files_by_stamp[stamp]))
+            files_by_date.add('%s %d' % (datetime.fromtimestamp(stamp).strftime('%Y-%m-%d'), data.files_by_stamp[stamp]))
 
         fg = open(path + '/files_by_date.dat', 'w')
         for line in sorted(list(files_by_date)):
             fg.write('%s\n' % line)
         #for stamp in sorted(data.files_by_stamp.keys()):
-        #    fg.write('%s %d\n' % (datetime.datetime.fromtimestamp(stamp).strftime('%Y-%m-%d'), data.files_by_stamp[stamp]))
+        #    fg.write('%s %d\n' % (datetime.fromtimestamp(stamp).strftime('%Y-%m-%d'), data.files_by_stamp[stamp]))
         fg.close()
             
         f.write('<img src="files_by_date.png" alt="Files by Date" />')
