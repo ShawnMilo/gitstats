@@ -13,6 +13,7 @@ import subprocess
 import sys
 import time
 import zlib
+from collections import defaultdict
 
 GNUPLOT_COMMON = 'set terminal png transparent size 640,240\nset size 1.0,1.0\n'
 ON_LINUX = (platform.system() == 'Linux')
@@ -38,9 +39,13 @@ conf = {
     'commit_end': 'HEAD',
     'linear_linestats': 1,
     'project_name': '',
+    'exclude_extensions': '',
 }
 
-def getpipeoutput(cmds, quiet = False):
+def getpipeoutput(cmds, quiet = True):
+    
+    #TODO: use subprocess.check_output instead
+    
     global exectime_external
     start = time.time()
     if not quiet and ON_LINUX and os.isatty(1):
@@ -135,7 +140,7 @@ class DataCollector:
         self.files_by_stamp = {} # stamp -> files
 
         # extensions
-        self.extensions = {} # extension -> files, lines
+        self.extensions = defaultdict(lambda: {'files': 0, 'lines': 0})
 
         # line statistics
         self.changes_by_date = {} # stamp -> { files, ins, del }
@@ -407,17 +412,13 @@ class GitDataCollector(DataCollector):
             sha1 = parts[2]
             fullpath = parts[3]
 
-            filename = fullpath.split('/')[-1] # strip directories
-            if filename.find('.') == -1 or filename.rfind('.') == 0:
+            filename = os.path.basename(fullpath) # strip directories
+            
+            try:
+                ext = filename.split(os.extsep)[-1]
+            except IndexError as ex:
                 ext = ''
-            else:
-                ext = filename[(filename.rfind('.') + 1):]
-            if len(ext) > conf['max_ext_length']:
-                ext = ''
-
-            if ext not in self.extensions:
-                self.extensions[ext] = {'files': 0, 'lines': 0}
-
+                
             self.extensions[ext]['files'] += 1
             try:
                 self.extensions[ext]['lines'] += self.getLinesInBlob(sha1)
@@ -642,9 +643,9 @@ class HTMLReportCreator(ReportCreator):
         basedirs = [binarypath, secondarypath, '/usr/share/gitstats']
         for file in ('gitstats.css', 'sortable.js', 'arrow-up.gif', 'arrow-down.gif', 'arrow-none.gif'):
             for base in basedirs:
-                src = base + '/' + file
+                src = os.path.join(base, file)
                 if os.path.exists(src):
-                    shutil.copyfile(src, path + '/' + file)
+                    shutil.copyfile(src, os.path.join(path, file))
                     break
             else:
                 print 'Warning: "%s" not found, so not copied (searched: %s)' % (file, basedirs)
