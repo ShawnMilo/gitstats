@@ -236,11 +236,11 @@ class GitDataCollector(DataCollector):
             self.total_authors += int(getpipeoutput(['git shortlog -s %s' % getcommitrange(), 'wc -l']))
         except:
             self.total_authors = 0
-        #self.total_lines = int(getoutput('git-ls-files -z |xargs -0 cat |wc -l'))
 
         # tags
         lines = getpipeoutput(['git show-ref --tags']).split('\n')
         for line in lines:
+            
             if len(line) == 0:
                 continue
             (hash, tag) = line.split(' ')
@@ -408,9 +408,8 @@ class GitDataCollector(DataCollector):
         for line in lines:
             if len(line) == 0:
                 continue
-            parts = re.split('\s+', line, 4)
-            sha1 = parts[2]
-            fullpath = parts[3]
+            
+            sha1, fullpath = line.split()[2:4]
 
             filename = os.path.basename(fullpath) # strip directories
             
@@ -442,38 +441,49 @@ class GitDataCollector(DataCollector):
         extra = ''
         if conf['linear_linestats']:
             extra = '--first-parent -m'
-        lines = getpipeoutput(['git log --shortstat %s --pretty=format:"%%at %%aN" %s' % (extra, getcommitrange('HEAD'))]).split('\n')
+            
+        lines = getpipeoutput(['git log --numstat %s --pretty=format:"%%at %%aN" %s' % (extra, getcommitrange('HEAD'))]).split('\n')
         lines.reverse()
         files = 0; inserted = 0; deleted = 0; total_lines = 0
         author = None
+        file_pattern = re.compile(r'^(\d+)\s+(\d+)\s+(.*)\s*$')
         for line in lines:
-            if len(line) == 0:
+            
+            #empty lines
+            if len(line.strip()) == 0:
                 continue
 
-            # <stamp> <author>
-            if line.find('files changed,') == -1:
-                pos = line.find(' ')
-                if pos != -1:
-                    try:
-                        (stamp, author) = (int(line[:pos]), line[pos+1:])
-                        self.changes_by_date[stamp] = { 'files': files, 'ins': inserted, 'del': deleted, 'lines': total_lines }
-                        files, inserted, deleted = 0, 0, 0
-                    except ValueError:
-                        print 'Warning: unexpected line "%s"' % line
-                else:
-                    print 'Warning: unexpected line "%s"' % line
-            else:
-                numbers = re.findall('\d+', line)
-                if len(numbers) == 3:
-                    (files, inserted, deleted) = map(lambda el : int(el), numbers)
-                    total_lines += inserted
-                    total_lines -= deleted
-                    self.total_lines_added += inserted
-                    self.total_lines_removed += deleted
-                else:
-                    print 'Warning: failed to handle line "%s"' % line
-                    (files, inserted, deleted) = (0, 0, 0)
-                #self.changes_by_date[stamp] = { 'files': files, 'ins': inserted, 'del': deleted }
+            #binary file
+            if line.startswith('-'):
+                continue
+
+            matches = file_pattern.search(line)
+            if matches:
+                
+                inserted, deleted, filename = matches.groups()
+                inserted = int(inserted)
+                deleted = int(deleted)
+
+                try:
+                    ext = filename.split(os.extsep)[-1]
+                except IndexError as ex:
+                    ext = ''
+                    
+                #ignore files we don't care about
+                if len(ext) and len(conf['exclude_extensions']):
+                    if ext in conf['exclude_extensions'].split(','):
+                        continue
+    
+                total_lines += inserted
+                total_lines -= deleted
+                self.total_lines_added += inserted
+                self.total_lines_removed += deleted
+
+            else:                
+                stamp = int(line.split()[0])
+                self.changes_by_date[stamp] = { 'files': files, 'ins': inserted, 'del': deleted, 'lines': total_lines }
+                files, inserted, deleted = 0, 0, 0
+
         self.total_lines = total_lines
 
         # Per-author statistics
