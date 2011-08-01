@@ -14,6 +14,7 @@ import sys
 import time
 import zlib
 from collections import defaultdict
+import urllib
 
 GNUPLOT_COMMON = 'set terminal png transparent size 640,240\nset size 1.0,1.0\n'
 ON_LINUX = (platform.system() == 'Linux')
@@ -75,7 +76,6 @@ def getcommitrange(defaultrange = 'HEAD', end_only = False):
 def getkeyssortedbyvalues(dict):
     return map(lambda el : el[1], sorted(map(lambda el : (el[1], el[0]), dict.items())))
 
-# dict['author'] = { 'commits': 512 } - ...key(dict, 'commits')
 def getkeyssortedbyvaluekey(d, key):
     return map(lambda el : el[1], sorted(map(lambda el : (d[el][key], el), d.keys())))
 
@@ -107,7 +107,7 @@ class DataCollector:
         self.activity_by_year_week = {} # yy_wNN -> commits
         self.activity_by_year_week_peak = 0
 
-        self.authors = {} # name -> {commits, first_commit_stamp, last_commit_stamp, last_active_day, active_days, lines_added, lines_removed}
+        self.authors = defaultdict(lambda: { 'lines_added' : 0, 'lines_removed' : 0, 'commits' : 0})
 
         self.total_commits = 0
         self.total_files = 0
@@ -143,7 +143,7 @@ class DataCollector:
         self.extensions = defaultdict(lambda: {'files': 0, 'lines': 0})
 
         # line statistics
-        self.changes_by_date = {} # stamp -> { files, ins, del }
+        self.changes_by_date = defaultdict(dict)
 
     ##
     # This should be the main function to extract data from the repository.
@@ -336,8 +336,6 @@ class GitDataCollector(DataCollector):
                 self.activity_by_year_week_peak = self.activity_by_year_week[yyw]
 
             # author stats
-            if author not in self.authors:
-                self.authors[author] = {}
             # commits, note again that commits may be in any date order because of cherry-picking and patches
             if 'last_commit_stamp' not in self.authors[author]:
                 self.authors[author]['last_commit_stamp'] = stamp
@@ -441,7 +439,7 @@ class GitDataCollector(DataCollector):
         extra = ''
         if conf['linear_linestats']:
             extra = '--first-parent -m'
-            
+
         lines = getpipeoutput(['git log --numstat %s --pretty=format:"%%at %%aN" %s' % (extra, getcommitrange('HEAD'))]).split('\n')
         lines.reverse()
         files = 0; inserted = 0; deleted = 0; total_lines = 0
@@ -489,54 +487,62 @@ class GitDataCollector(DataCollector):
         # Per-author statistics
 
         # defined for stamp, author only if author commited at this timestamp.
-        self.changes_by_date_by_author = {} # stamp -> author -> lines_added
+        self.changes_by_date_by_author = defaultdict(dict)
 
         # Similar to the above, but never use --first-parent
         # (we need to walk through every commit to know who
         # committed what, not just through mainline)
-        lines = getpipeoutput(['git log --shortstat --date-order --pretty=format:"%%at %%aN" %s' % (getcommitrange('HEAD'))]).split('\n')
+        
+        lines = getpipeoutput(['git log --numstat --date-order --pretty=format:"%%at %%aN" %s' % (getcommitrange('HEAD'))]).split('\n')
         lines.reverse()
         files = 0; inserted = 0; deleted = 0
         author = None
         stamp = 0
         for line in lines:
-            if len(line) == 0:
+            if len(line.strip()) == 0:
                 continue
 
-            # <stamp> <author>
-            if line.find('files changed,') == -1:
-                pos = line.find(' ')
-                if pos != -1:
-                    try:
-                        oldstamp = stamp
-                        (stamp, author) = (int(line[:pos]), line[pos+1:])
-                        if oldstamp > stamp:
-                            # clock skew, keep old timestamp to avoid having ugly graph
-                            stamp = oldstamp
-                        if author not in self.authors:
-                            self.authors[author] = { 'lines_added' : 0, 'lines_removed' : 0, 'commits' : 0}
-                        self.authors[author]['commits'] = self.authors[author].get('commits', 0) + 1
-                        self.authors[author]['lines_added'] = self.authors[author].get('lines_added', 0) + inserted
-                        self.authors[author]['lines_removed'] = self.authors[author].get('lines_removed', 0) + deleted
-                        if stamp not in self.changes_by_date_by_author:
-                            self.changes_by_date_by_author[stamp] = {}
-                        if author not in self.changes_by_date_by_author[stamp]:
-                            self.changes_by_date_by_author[stamp][author] = {}
-                        self.changes_by_date_by_author[stamp][author]['lines_added'] = self.authors[author]['lines_added']
-                        self.changes_by_date_by_author[stamp][author]['commits'] = self.authors[author]['commits']
-                        files, inserted, deleted = 0, 0, 0
-                    except ValueError:
-                        print 'Warning: unexpected line "%s"' % line
-                else:
-                    print 'Warning: unexpected line "%s"' % line
+            #binary file
+            if line.startswith('-'):
+                continue
+
+            matches = file_pattern.search(line)
+            if matches:
+
+                inserted, deleted, filename = matches.groups()
+                inserted, deleted = int(inserted), int(deleted)
+                
+                try:
+                    ext = filename.split(os.extsep)[-1]
+                except IndexError as ex:
+                    ext = ''
+                    
+                #ignore files we don't care about
+                if len(ext) and len(conf['exclude_extensions']):
+                    if ext in conf['exclude_extensions'].split(','):
+                        continue
+                
+                files += 1
+                
             else:
-                numbers = re.findall('\d+', line)
-                if len(numbers) == 3:
-                    (files, inserted, deleted) = map(lambda el : int(el), numbers)
-                else:
-                    print 'Warning: failed to handle line "%s"' % line
-                    (files, inserted, deleted) = (0, 0, 0)
-    
+                oldstamp = stamp
+                stamp = int(line.split()[0])
+                author = ' '.join(line.split()[1:])
+                
+                if oldstamp > stamp:
+                    # clock skew, keep old timestamp to avoid having ugly graph
+                    stamp = oldstamp
+
+                self.authors[author]['commits'] += 1
+                self.authors[author]['lines_added'] += inserted
+                self.authors[author]['lines_removed'] += deleted
+
+                if author not in self.changes_by_date_by_author[stamp]:
+                    self.changes_by_date_by_author[stamp][author] = dict()
+                self.changes_by_date_by_author[stamp][author]['lines_added'] = self.authors[author]['lines_added']
+                self.changes_by_date_by_author[stamp][author]['commits'] = self.authors[author]['commits']
+                files, inserted, deleted = 0, 0, 0
+                
     def refine(self):
         # authors
         # name -> {place_by_commits, commits_frac, date_first, date_last, timedelta}
@@ -642,11 +648,8 @@ class ReportCreator:
         self.data = data
         self.path = path
 
-def html_linkify(text):
-    return text.lower().replace(' ', '_')
-
 def html_header(level, text):
-    name = html_linkify(text)
+    name = urllib.quote(text)
     return '\n<h%d><a href="#%s" name="%s">%s</a></h%d>\n\n' % (level, name, name, text, level)
 
 class HTMLReportCreator(ReportCreator):
@@ -667,7 +670,7 @@ class HTMLReportCreator(ReportCreator):
             else:
                 print 'Warning: "%s" not found, so not copied (searched: %s)' % (file, basedirs)
 
-        f = open(path + "/index.html", 'w')
+        f = open(os.path.join(path, "index.html"), 'w')
         format = '%Y-%m-%d %H:%M:%S'
         self.printHeader(f)
 
