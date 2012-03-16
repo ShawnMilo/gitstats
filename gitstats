@@ -2,7 +2,7 @@
 # Copyright (c) 2007-2011 Heikki Hokkanen <hoxu@users.sf.net> & others (see doc/author.txt)
 # GPLv2 / GPLv3
 from datetime import datetime, timedelta
-import getopt
+import getopt #todo: replace with argparse
 import glob
 import os
 import pickle
@@ -43,19 +43,19 @@ conf = {
     'exclude_extensions': '',
 }
 
-def getpipeoutput(cmds, quiet = True):
-    
+def getpipeoutput(cmds, quiet=True):
+
     #TODO: use subprocess.check_output instead
-    
+
     global exectime_external
     start = time.time()
     if not quiet and ON_LINUX and os.isatty(1):
         print '>> ' + ' | '.join(cmds),
         sys.stdout.flush()
-    p0 = subprocess.Popen(cmds[0], stdout = subprocess.PIPE, shell = True)
+    p0 = subprocess.Popen(cmds[0], stdout=subprocess.PIPE, shell=True)
     p = p0
     for x in cmds[1:]:
-        p = subprocess.Popen(x, stdin = p0.stdout, stdout = subprocess.PIPE, shell = True)
+        p = subprocess.Popen(x, stdin=p0.stdout, stdout=subprocess.PIPE, shell=True)
         p0 = p
     output = p.communicate()[0]
     end = time.time()
@@ -66,7 +66,7 @@ def getpipeoutput(cmds, quiet = True):
     exectime_external += (end - start)
     return output.rstrip('\n')
 
-def getcommitrange(defaultrange = 'HEAD', end_only = False):
+def getcommitrange(defaultrange='HEAD', end_only=False):
     if len(conf['commit_end']) > 0:
         if end_only or len(conf['commit_begin']) == 0:
             return conf['commit_end']
@@ -153,7 +153,7 @@ class DataCollector:
             self.projectname = os.path.basename(os.path.abspath(dir))
         else:
             self.projectname = conf['project_name']
-    
+
     ##
     # Load cacheable data
     def loadCache(self, cachefile):
@@ -168,7 +168,7 @@ class DataCollector:
             f.seek(0)
             self.cache = pickle.load(f)
         f.close()
-    
+
     ##
     # Produce any additional statistics from the extracted data.
     def refine(self):
@@ -178,7 +178,7 @@ class DataCollector:
     # : get a dictionary of author
     def getAuthorInfo(self, author):
         return None
-    
+
     def getActivityByDayOfWeek(self):
         return {}
 
@@ -193,31 +193,31 @@ class DataCollector:
     # Get a list of authors
     def getAuthors(self):
         return []
-    
+
     def getFirstCommitDate(self):
         return datetime.now()
-    
+
     def getLastCommitDate(self):
         return datetime.now()
-    
+
     def getStampCreated(self):
         return self.stamp_created
-    
+
     def getTags(self):
         return []
-    
+
     def getTotalAuthors(self):
         return -1
-    
+
     def getTotalCommits(self):
         return -1
-        
+
     def getTotalFiles(self):
         return -1
-    
+
     def getTotalLOC(self):
         return -1
-    
+
     ##
     # Save cacheable data
     def saveCache(self, cachefile):
@@ -240,7 +240,7 @@ class GitDataCollector(DataCollector):
         # tags
         lines = getpipeoutput(['git show-ref --tags']).split('\n')
         for line in lines:
-            
+
             if len(line) == 0:
                 continue
             (hash, tag) = line.split(' ')
@@ -402,25 +402,25 @@ class GitDataCollector(DataCollector):
 
         # extensions
         lines = getpipeoutput(['git ls-tree -r -z %s' % getcommitrange('HEAD', end_only = True)]).split('\000')
-        
+
         for line in lines:
             if len(line) == 0:
                 continue
-            
+
             sha1, fullpath = line.split()[2:4]
 
             filename = os.path.basename(fullpath) # strip directories
-            
+
             try:
                 ext = filename.split(os.extsep)[-1]
             except IndexError as ex:
                 ext = ''
-                
+
             #skip extensions we aren't interested in
             if len(ext) and len(conf['exclude_extensions']):
                 if ext in conf['exclude_extensions'].split(','):
                     continue
- 
+
             self.extensions[ext]['files'] += 1
             try:
                 self.extensions[ext]['lines'] += self.getLinesInBlob(sha1)
@@ -446,7 +446,7 @@ class GitDataCollector(DataCollector):
         author = None
         file_pattern = re.compile(r'^(\d+)\s+(\d+)\s+(.*)\s*$')
         for line in lines:
-            
+
             #empty lines
             if len(line.strip()) == 0:
                 continue
@@ -457,7 +457,7 @@ class GitDataCollector(DataCollector):
 
             matches = file_pattern.search(line)
             if matches:
-                
+
                 inserted, deleted, filename = matches.groups()
                 inserted = int(inserted)
                 deleted = int(deleted)
@@ -466,18 +466,18 @@ class GitDataCollector(DataCollector):
                     ext = filename.split(os.extsep)[-1]
                 except IndexError as ex:
                     ext = ''
-                    
+
                 #ignore files we don't care about
                 if len(ext) and len(conf['exclude_extensions']):
                     if ext in conf['exclude_extensions'].split(','):
                         continue
-    
+
                 total_lines += inserted
                 total_lines -= deleted
                 self.total_lines_added += inserted
                 self.total_lines_removed += deleted
 
-            else:                
+            else:
                 stamp = int(line.split()[0])
                 self.changes_by_date[stamp] = { 'files': files, 'ins': inserted, 'del': deleted, 'lines': total_lines }
                 files, inserted, deleted = 0, 0, 0
@@ -492,7 +492,7 @@ class GitDataCollector(DataCollector):
         # Similar to the above, but never use --first-parent
         # (we need to walk through every commit to know who
         # committed what, not just through mainline)
-        
+
         lines = getpipeoutput(['git log --numstat --date-order --pretty=format:"%%at %%aN" %s' % (getcommitrange('HEAD'))]).split('\n')
         lines.reverse()
         files = 0; inserted = 0; deleted = 0
@@ -511,24 +511,24 @@ class GitDataCollector(DataCollector):
 
                 inserted, deleted, filename = matches.groups()
                 inserted, deleted = int(inserted), int(deleted)
-                
+
                 try:
                     ext = filename.split(os.extsep)[-1]
                 except IndexError as ex:
                     ext = ''
-                    
+
                 #ignore files we don't care about
                 if len(ext) and len(conf['exclude_extensions']):
                     if ext in conf['exclude_extensions'].split(','):
                         continue
-                
+
                 files += 1
-                
+
             else:
                 oldstamp = stamp
                 stamp = int(line.split()[0])
                 author = ' '.join(line.split()[1:])
-                
+
                 if oldstamp > stamp:
                     # clock skew, keep old timestamp to avoid having ugly graph
                     stamp = oldstamp
@@ -542,7 +542,7 @@ class GitDataCollector(DataCollector):
                 self.changes_by_date_by_author[stamp][author]['lines_added'] = self.authors[author]['lines_added']
                 self.changes_by_date_by_author[stamp][author]['commits'] = self.authors[author]['commits']
                 files, inserted, deleted = 0, 0, 0
-                
+
     def refine(self):
         # authors
         # name -> {place_by_commits, commits_frac, date_first, date_last, timedelta}
@@ -562,7 +562,7 @@ class GitDataCollector(DataCollector):
             a['timedelta'] = delta
             if 'lines_added' not in a: a['lines_added'] = 0
             if 'lines_removed' not in a: a['lines_removed'] = 0
-    
+
     def getActiveDays(self):
         return self.active_days
 
@@ -574,12 +574,12 @@ class GitDataCollector(DataCollector):
 
     def getAuthorInfo(self, author):
         return self.authors[author]
-    
+
     def getAuthors(self, limit = None):
         res = getkeyssortedbyvaluekey(self.authors, 'commits')
         res.reverse()
         return res[:limit]
-    
+
     def getCommitDeltaDays(self):
         return (self.last_commit_stamp - self.first_commit_stamp) / 86400 + 1
 
@@ -588,7 +588,7 @@ class GitDataCollector(DataCollector):
 
     def getDomains(self):
         return self.domains.keys()
-    
+
     def getFilesInCommit(self, rev):
         try:
             res = self.cache['files_in_tree'][rev]
@@ -602,10 +602,10 @@ class GitDataCollector(DataCollector):
 
     def getFirstCommitDate(self):
         return datetime.fromtimestamp(self.first_commit_stamp)
-    
+
     def getLastCommitDate(self):
         return datetime.fromtimestamp(self.last_commit_stamp)
-    
+
     def getLinesInBlob(self, sha1):
         try:
             res = self.cache['lines_in_blob'][sha1]
@@ -619,22 +619,22 @@ class GitDataCollector(DataCollector):
     def getTags(self):
         lines = getpipeoutput(['git show-ref --tags', 'cut -d/ -f3'])
         return lines.split('\n')
-    
+
     def getTagDate(self, tag):
         return self.revToDate('tags/' + tag)
-    
+
     def getTotalAuthors(self):
         return self.total_authors
-    
+
     def getTotalCommits(self):
         return self.total_commits
 
     def getTotalFiles(self):
         return self.total_files
-    
+
     def getTotalLOC(self):
         return self.total_lines
-    
+
     def revToDate(self, rev):
         stamp = int(getpipeoutput(['git log --pretty=format:%%at "%s" -n 1' % rev]))
         return datetime.fromtimestamp(stamp).strftime('%Y-%m-%d')
@@ -643,7 +643,7 @@ class ReportCreator:
     """Creates the actual report based on given data."""
     def __init__(self):
         pass
-    
+
     def create(self, data, path):
         self.data = data
         self.path = path
@@ -997,7 +997,7 @@ class HTMLReportCreator(ReportCreator):
         f.write('<dl>\n')
         f.write('<dt>Total files</dt><dd>%d</dd>' % data.getTotalFiles())
         f.write('<dt>Total lines</dt><dd>%d</dd>' % data.getTotalLOC())
-        
+
         try:
             average_size = (100.0 * data.getTotalLOC()) / data.getTotalFiles()
         except ZeroDivisionError as ex:
@@ -1019,7 +1019,7 @@ class HTMLReportCreator(ReportCreator):
         #for stamp in sorted(data.files_by_stamp.keys()):
         #    fg.write('%s %d\n' % (datetime.fromtimestamp(stamp).strftime('%Y-%m-%d'), data.files_by_stamp[stamp]))
         fg.close()
-            
+
         f.write('<img src="files_by_date.png" alt="Files by Date" />')
 
         #f.write('<h2>Average file size by date</h2>')
@@ -1030,12 +1030,12 @@ class HTMLReportCreator(ReportCreator):
         for ext in sorted(data.extensions.keys()):
             files = data.extensions[ext]['files']
             lines = data.extensions[ext]['lines']
-            
+
             try:
                 ext_pct = (100.0 * files) / data.getTotalFiles()
             except ZeroDivisionError as ex:
                 ext_pct = 0.0
-            
+
             f.write('<tr><td>%s</td><td>%d (%.2f%%)</td><td>%d (%.2f%%)</td><td>%d</td></tr>' % (ext, files, ext_pct, lines, (100.0 * lines) / data.getTotalLOC(), lines / files))
         f.write('</table>')
 
@@ -1093,7 +1093,7 @@ class HTMLReportCreator(ReportCreator):
         f.close()
 
         self.createGraphs(path)
-    
+
     def createGraphs(self, path):
         print 'Generating graphs...'
 
@@ -1315,7 +1315,7 @@ plot """
 </ul>
 </div>
 """)
-        
+
 
 class GitStats:
     def run(self, args_orig):
@@ -1384,4 +1384,3 @@ Default config values:
 if __name__=='__main__':
     g = GitStats()
     g.run(sys.argv[1:])
-
