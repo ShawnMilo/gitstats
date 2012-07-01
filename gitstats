@@ -40,12 +40,10 @@ conf = {
     'commit_end': 'HEAD',
     'linear_linestats': 1,
     'project_name': '',
-    'exclude_extensions': '',
+    'exclude_extensions': 'png,gif,pdf,json,csv,jpg,sh,txt',
 }
 
 def getpipeoutput(cmds, quiet=True):
-
-    #TODO: use subprocess.check_output instead
 
     global exectime_external
     start = time.time()
