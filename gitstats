@@ -681,7 +681,7 @@ class HTMLReportCreator(ReportCreator):
 
         out.append('<h1>GitStats - %s</h1>' % data.projectname)
 
-        self.printNav(f)
+        out.append(self.printNav)
 
         out.append('<dl>')
         out.append('<dt>Project name</dt><dd>%s</dd>' % (data.projectname))
@@ -705,7 +705,7 @@ class HTMLReportCreator(ReportCreator):
         out = []
         self.printHeader(f)
         out.append('<h1>Activity</h1>')
-        self.printNav(f)
+        out.append(self.printNav)
 
         #out.append('<h2>Last 30 days</h2>')
 
@@ -905,7 +905,7 @@ class HTMLReportCreator(ReportCreator):
         self.printHeader(f)
 
         out.append('<h1>Authors</h1>')
-        self.printNav(f)
+        out.append(self.printNav)
 
         # Authors :: List of authors
         out.append(html_header(2, 'List of Authors'))
@@ -1027,7 +1027,7 @@ class HTMLReportCreator(ReportCreator):
         f = open(path + '/files.html', 'w')
         self.printHeader(f)
         out.append('<h1>Files</h1>')
-        self.printNav(f)
+        out.append(self.printNav)
 
         out.append('<dl>\n')
         out.append('<dt>Total files</dt><dd>%d</dd>' % data.getTotalFiles())
@@ -1081,7 +1081,7 @@ class HTMLReportCreator(ReportCreator):
         f = open(path + '/lines.html', 'w')
         self.printHeader(f)
         out.append('<h1>Lines</h1>')
-        self.printNav(f)
+        out.append(self.printNav)
 
         out.append('<dl>\n')
         out.append('<dt>Total lines</dt><dd>%d</dd>' % data.getTotalLOC())
@@ -1106,7 +1106,7 @@ class HTMLReportCreator(ReportCreator):
         f = open(path + '/tags.html', 'w')
         self.printHeader(f)
         out.append('<h1>Tags</h1>')
-        self.printNav(f)
+        out.append(self.printNav)
 
         out.append('<dl>')
         out.append('<dt>Total tags</dt><dd>%d</dd>' % len(data.tags))
@@ -1341,7 +1341,7 @@ plot """
 """ % (self.title, conf['style'], getversion()))
 
     def printNav(self, f):
-        f.write("""
+        return """
 <div class="nav">
 <ul>
 <li><a href="index.html">General</a></li>
@@ -1352,7 +1352,7 @@ plot """
 <li><a href="tags.html">Tags</a></li>
 </ul>
 </div>
-""")
+"""
 
 
 class GitStats:
