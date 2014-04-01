@@ -1028,6 +1028,7 @@ class HTMLReportCreator(ReportCreator):
 
         ###
         # Files
+        out = []
         f = open(path + '/files.html', 'w')
         self.printHeader(f)
         out.append('<h1>Files</h1>')
@@ -1078,6 +1079,7 @@ class HTMLReportCreator(ReportCreator):
         out.append('</table>')
 
         out.append('</body></html>')
+        out.write('\n'.join(out))
         f.close()
 
         ###
