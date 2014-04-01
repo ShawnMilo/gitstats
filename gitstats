@@ -1111,6 +1111,7 @@ class HTMLReportCreator(ReportCreator):
 
         ###
         # tags.html
+        out = []
         f = open(path + '/tags.html', 'w')
         self.printHeader(f)
         out.append('<h1>Tags</h1>')
