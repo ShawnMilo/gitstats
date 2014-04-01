@@ -1056,7 +1056,7 @@ class HTMLReportCreator(ReportCreator):
         fg = open(path + '/files_by_date.dat', 'w')
         out2 = []
         for line in sorted(list(files_by_date)):
-            out2.append('%s\n' % line)
+            out2.append(line)
         fg.write('\n'.join(out2))
         del out2
         fg.close()
