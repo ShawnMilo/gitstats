@@ -1085,6 +1085,7 @@ class HTMLReportCreator(ReportCreator):
         ###
         # Lines
         f = open(path + '/lines.html', 'w')
+        out = []
         self.printHeader(f)
         out.append('<h1>Lines</h1>')
         out.append(self.printNav())
