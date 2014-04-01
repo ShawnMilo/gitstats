@@ -1100,12 +1100,13 @@ class HTMLReportCreator(ReportCreator):
         fg = open(path + '/lines_of_code.dat', 'w')
         out2 = []
         for stamp in sorted(data.changes_by_date.keys()):
-            out2.append('%d %d\n' % (stamp, data.changes_by_date[stamp]['lines']))
+            out2.append('%d %d' % (stamp, data.changes_by_date[stamp]['lines']))
         fg.write('\n'.join(out2))
         del out2
         fg.close()
 
         out.append('</body></html>')
+        f.write('\n'.join(out))
         f.close()
 
         ###
