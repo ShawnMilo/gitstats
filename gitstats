@@ -902,6 +902,7 @@ class HTMLReportCreator(ReportCreator):
 
         ###
         # Authors
+        out = []
         f = open(path + '/authors.html', 'w')
         self.printHeader(f)
 
@@ -1023,7 +1024,6 @@ class HTMLReportCreator(ReportCreator):
         out.append('</body></html>')
 
         f.write('\n'.join(out))
-
         f.close()
 
         ###
