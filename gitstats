@@ -1079,7 +1079,7 @@ class HTMLReportCreator(ReportCreator):
         out.append('</table>')
 
         out.append('</body></html>')
-        out.write('\n'.join(out))
+        f.write('\n'.join(out))
         f.close()
 
         ###
