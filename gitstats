@@ -29,7 +29,8 @@ log_path = os.path.join(tempfile.gettempdir(), 'gitstats.log')
 logger.addHandler(logging.FileHandler(log_path))
 logger.setLevel(logging.DEBUG)
 
-GNUPLOT_COMMON = 'set terminal png transparent size 640,240\nset size 1.0,1.0\n'
+GNUPLOT_COMMON = \
+    'set terminal png transparent size 640,240\nset size 1.0,1.0\n'
 ON_LINUX = (platform.system() == 'Linux')
 WEEKDAYS = ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
 
@@ -64,7 +65,8 @@ def getpipeoutput(cmds, quiet=True):
     p0 = subprocess.Popen(cmds[0], stdout=subprocess.PIPE, shell=True)
     p = p0
     for x in cmds[1:]:
-        p = subprocess.Popen(x, stdin=p0.stdout, stdout=subprocess.PIPE, shell=True)
+        p = subprocess.Popen(
+            x, stdin=p0.stdout, stdout=subprocess.PIPE, shell=True)
         p0 = p
     output = p.communicate()[0]
     end = time.time()
@@ -83,16 +85,23 @@ def getcommitrange(defaultrange='HEAD', end_only=False):
     return defaultrange
 
 def getkeyssortedbyvalues(dict):
-    return map(lambda el : el[1], sorted(map(lambda el : (el[1], el[0]), dict.items())))
+    return map(
+        lambda el: el[1],
+        sorted(map(lambda el: (el[1], el[0]), dict.items()))
+    )
 
 def getkeyssortedbyvaluekey(d, key):
-    return map(lambda el : el[1], sorted(map(lambda el : (d[el][key], el), d.keys())))
+    return map(
+        lambda el: el[1], sorted(map(lambda el: (d[el][key], el), d.keys())))
 
 VERSION = 0
 def getversion():
     global VERSION
     if VERSION == 0:
-        VERSION = getpipeoutput(["git rev-parse --short %s" % getcommitrange('HEAD')]).split('\n')[0]
+        VERSION = getpipeoutput(
+            ["git rev-parse --short %s" % getcommitrange('HEAD')]
+        ).split('\n')[0]
+
     return VERSION
 
 def getgitversion():
@@ -116,7 +125,8 @@ class DataCollector:
         self.activity_by_year_week = {} # yy_wNN -> commits
         self.activity_by_year_week_peak = 0
 
-        self.authors = defaultdict(lambda: { 'lines_added' : 0, 'lines_removed' : 0, 'commits' : 0})
+        self.authors = defaultdict(
+            lambda: {'lines_added' : 0, 'lines_removed' : 0, 'commits' : 0})
 
         self.total_commits = 0
         self.total_files = 0
@@ -242,7 +252,10 @@ class GitDataCollector(DataCollector):
         DataCollector.collect(self, dir)
 
         try:
-            self.total_authors += int(getpipeoutput(['git shortlog -s %s' % getcommitrange(), 'wc -l']))
+            self.total_authors += int(
+                getpipeoutput(['git shortlog -s %s' % getcommitrange(),
+                'wc -l'])
+            )
         except:
             self.total_authors = 0
 
@@ -255,7 +268,8 @@ class GitDataCollector(DataCollector):
             (hash, tag) = line.split(' ')
 
             tag = tag.replace('refs/tags/', '')
-            output = getpipeoutput(['git log "%s" --pretty=format:"%%at %%aN" -n 1' % hash])
+            output = getpipeoutput(
+                ['git log "%s" --pretty=format:"%%at %%aN" -n 1' % hash])
             if len(output) > 0:
                 parts = output.split(' ')
                 stamp = 0
@@ -263,10 +277,14 @@ class GitDataCollector(DataCollector):
                     stamp = int(parts[0])
                 except ValueError:
                     stamp = 0
-                self.tags[tag] = { 'stamp': stamp, 'hash' : hash, 'date' : datetime.fromtimestamp(stamp).strftime('%Y-%m-%d'), 'commits': 0, 'authors': {} }
+                self.tags[tag] = {
+                    'stamp': stamp, 'hash' : hash,
+                    'date' : datetime.fromtimestamp(stamp).strftime('%Y-%m-%d'),
+                    'commits': 0, 'authors': {}
+                }
 
         # collect info on tags, starting from latest
-        tags_sorted_by_date_desc = map(lambda el : el[1], reversed(sorted(map(lambda el : (el[1]['date'], el[0]), self.tags.items()))))
+        tags_sorted_by_date_desc = map(lambda el: el[1], reversed(sorted(map(lambda el: (el[1]['date'], el[0]), self.tags.items()))))
         prev = None
         for tag in reversed(tags_sorted_by_date_desc):
             cmd = 'git shortlog -s "%s"' % tag
@@ -391,7 +409,9 @@ class GitDataCollector(DataCollector):
 
         # TODO Optimize this, it's the worst bottleneck
         # outputs "<stamp> <files>" for each revision
-        revlines = getpipeoutput(['git rev-list --pretty=format:"%%at %%T" %s' % getcommitrange('HEAD'), 'grep -v ^commit']).strip().split('\n')
+        revlines = getpipeoutput([
+            'git rev-list --pretty=format:"%%at %%T" %s' % getcommitrange('HEAD'), 'grep -v ^commit'
+        ]).strip().split('\n')
         lines = []
         for revline in revlines:
             time, rev = revline.split(' ')
@@ -410,7 +430,9 @@ class GitDataCollector(DataCollector):
                 print 'Warning: failed to parse line "%s"' % line
 
         # extensions
-        lines = getpipeoutput(['git ls-tree -r -z %s' % getcommitrange('HEAD', end_only = True)]).split('\000')
+        lines = getpipeoutput([
+            'git ls-tree -r -z %s' % getcommitrange('HEAD', end_only=True)
+        ]).split('\000')
 
         for line in lines:
             if len(line) == 0:
@@ -1132,7 +1154,7 @@ class HTMLReportCreator(ReportCreator):
         out.append('<table class="tags">')
         out.append('<tr><th>Name</th><th>Date</th><th>Commits</th><th>Authors</th></tr>')
         # sort the tags by date desc
-        tags_sorted_by_date_desc = map(lambda el : el[1], reversed(sorted(map(lambda el : (el[1]['date'], el[0]), data.tags.items()))))
+        tags_sorted_by_date_desc = map(lambda el: el[1], reversed(sorted(map(lambda el: (el[1]['date'], el[0]), data.tags.items()))))
         for tag in tags_sorted_by_date_desc:
             authorinfo = []
             self.authors_by_commits = getkeyssortedbyvalues(data.tags[tag]['authors'])
