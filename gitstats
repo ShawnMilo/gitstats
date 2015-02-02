@@ -12,7 +12,6 @@ import getopt  # todo: replace with argparse
 import glob
 import os
 import pickle
-import platform
 import re
 import shutil
 import subprocess
@@ -31,7 +30,6 @@ logger.setLevel(logging.DEBUG)
 
 GNUPLOT_COMMON = \
     'set terminal png transparent size 640,240\nset size 1.0,1.0\n'
-ON_LINUX = (platform.system() == 'Linux')
 WEEKDAYS = ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
 
 time_start = time.time()
@@ -55,7 +53,7 @@ conf = {
 }
 
 
-def getpipeoutput(cmds, quiet=True):
+def getpipeoutput(cmds):
     """
     Accept a series of commands.
 
@@ -73,10 +71,6 @@ def getpipeoutput(cmds, quiet=True):
         p0 = p
     output = p.communicate()[0]
     end = time.time()
-    if not quiet:
-        if ON_LINUX and os.isatty(1):
-            print '\r',
-        print '[%.5f] >> %s' % (end - start, ' | '.join(cmds))
     return output.rstrip()
 
 
@@ -1662,8 +1656,6 @@ Default config values:
     print 'Generating report...'
     report = HTMLReportCreator()
     report.create(data, outputpath)
-
-    time_end = time.time()
 
 if __name__ == '__main__':
     run(sys.argv[1:])
