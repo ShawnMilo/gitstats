@@ -34,8 +34,6 @@ GNUPLOT_COMMON = \
 ON_LINUX = (platform.system() == 'Linux')
 WEEKDAYS = ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
 
-exectime_internal = 0.0
-exectime_external = 0.0
 time_start = time.time()
 
 # By default, gnuplot is searched from path, but can be overridden with the
@@ -46,7 +44,6 @@ if 'GNUPLOT' in os.environ:
 
 conf = {
     'max_domains': 10,
-    'max_ext_length': 10,
     'style': 'gitstats.css',
     'max_authors': 20,
     'authors_top': 5,
@@ -59,8 +56,13 @@ conf = {
 
 
 def getpipeoutput(cmds, quiet=True):
+    """
+    Accept a series of commands.
 
-    global exectime_external
+    Execute each command in order, piping the output of
+    each into the subsequent command.
+    """
+
     start = time.time()
 
     p0 = subprocess.Popen(cmds[0], stdout=subprocess.PIPE, shell=True)
@@ -75,7 +77,6 @@ def getpipeoutput(cmds, quiet=True):
         if ON_LINUX and os.isatty(1):
             print '\r',
         print '[%.5f] >> %s' % (end - start, ' | '.join(cmds))
-    exectime_external += (end - start)
     return output.rstrip()
 
 
@@ -1663,8 +1664,6 @@ Default config values:
         report.create(data, outputpath)
 
         time_end = time.time()
-        exectime_internal = time_end - time_start
-        print 'Execution time %.5f secs, %.5f secs (%.2f %%) in external commands)' % (exectime_internal, exectime_external, (100.0 * exectime_external) / exectime_internal)
 
 if __name__ == '__main__':
     g = GitStats()
