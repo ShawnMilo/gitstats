@@ -60,16 +60,13 @@ def getpipeoutput(cmds):
     Execute each command in order, piping the output of
     each into the subsequent command.
     """
-
-    start = time.time()
-
-    p0 = subprocess.Popen(cmds[0], stdout=subprocess.PIPE, shell=True)
-    p = p0
+    proc = subprocess.Popen(cmds[0], stdout=subprocess.PIPE, shell=True)
+    prev = proc
     for x in cmds[1:]:
-        p = subprocess.Popen(
-            x, stdin=p0.stdout, stdout=subprocess.PIPE, shell=True)
-        p0 = p
-    output = p.communicate()[0]
+        proc = subprocess.Popen(
+            x, stdin=prev.stdout, stdout=subprocess.PIPE, shell=True)
+        prev = proc
+    output = proc.communicate()[0]
     end = time.time()
     return output.rstrip()
 
