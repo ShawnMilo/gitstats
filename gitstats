@@ -71,12 +71,12 @@ def getpipeoutput(cmds):
     return output.rstrip()
 
 
-def getcommitrange(defaultrange='HEAD', end_only=False):
+def getcommitrange(end_only=False):
     if len(conf['commit_end']) > 0:
         if end_only or len(conf['commit_begin']) == 0:
             return conf['commit_end']
         return '%s..%s' % (conf['commit_begin'], conf['commit_end'])
-    return defaultrange
+    return "HEAD"
 
 
 def getkeyssortedbyvalues(dict):
@@ -97,7 +97,7 @@ def getversion():
     global VERSION
     if VERSION == 0:
         VERSION = getpipeoutput(
-            ["git rev-parse --short %s" % getcommitrange('HEAD')]
+            ["git rev-parse --short %s" % getcommitrange()]
         ).split('\n')[0]
 
     return VERSION
@@ -312,7 +312,7 @@ class GitDataCollector(DataCollector):
         lines = getpipeoutput(
             [
                 'git rev-list --pretty=format:"%%at %%ai %%aN <%%aE>" %s' %
-                getcommitrange('HEAD'),
+                getcommitrange(),
                 'grep -v ^commit']).split('\n')
         for line in lines:
             parts = line.split(' ', 4)
@@ -438,8 +438,8 @@ class GitDataCollector(DataCollector):
         # TODO Optimize this, it's the worst bottleneck
         # outputs "<stamp> <files>" for each revision
         revlines = getpipeoutput([
-            'git rev-list --pretty=format:"%%at %%T" %s' % getcommitrange(
-                'HEAD'), 'grep -v ^commit'
+            'git rev-list --pretty=format:"%%at %%T" %s' % getcommitrange(),
+            'grep -v ^commit'
         ]).strip().split('\n')
         lines = []
         for revline in revlines:
@@ -460,7 +460,7 @@ class GitDataCollector(DataCollector):
 
         # extensions
         lines = getpipeoutput([
-            'git ls-tree -r -z %s' % getcommitrange('HEAD', end_only=True)
+            'git ls-tree -r -z %s' % getcommitrange(end_only=True)
         ]).split('\000')
 
         for line in lines:
@@ -503,7 +503,7 @@ class GitDataCollector(DataCollector):
         lines = getpipeoutput(
             [
                 'git log --numstat %s --pretty=format:"%%at %%aN" %s' %
-                (extra, getcommitrange('HEAD'))]).split('\n')
+                (extra, getcommitrange())]).split('\n')
         lines.reverse()
         files = 0
         inserted = 0
@@ -566,7 +566,7 @@ class GitDataCollector(DataCollector):
         lines = getpipeoutput(
             [
                 'git log --numstat --date-order --pretty=format:"%%at %%aN" %s' %
-                (getcommitrange('HEAD'))]).split('\n')
+                (getcommitrange())]).split('\n')
         lines.reverse()
         files = 0
         inserted = 0
