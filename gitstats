@@ -70,14 +70,12 @@ def getkeyssortedbyvaluekey(d, key):
 
 VERSION = 0
 
-
 def getversion():
     global VERSION
     if VERSION == 0:
         VERSION = getpipeoutput(
             ["git rev-parse --short HEAD"]
         ).split('\n')[0]
-
     return VERSION
 
 
@@ -1326,15 +1324,15 @@ class HTMLReportCreator(ReportCreator):
         f.write('\n'.join(out))
         f.close()
 
-        self.createGraphs(path)
+        self.create_graphs(path)
 
-    def createGraphs(self, path):
+    def create_graphs(self, path):
         print 'Generating graphs...'
 
         # hour of day
-        f = open(path + '/hour_of_day.plot', 'w')
-        f.write(GNUPLOT_COMMON)
-        f.write(
+        out = open(path + '/hour_of_day.plot', 'w')
+        out.write(GNUPLOT_COMMON)
+        out.write(
             """
 set output 'hour_of_day.png'
 unset key
@@ -1344,12 +1342,12 @@ set grid y
 set ylabel "Commits"
 plot 'hour_of_day.dat' using 1:2:(0.5) w boxes fs solid
 """)
-        f.close()
+        out.close()
 
         # day of week
-        f = open(path + '/day_of_week.plot', 'w')
-        f.write(GNUPLOT_COMMON)
-        f.write(
+        out = open(path + '/day_of_week.plot', 'w')
+        out.write(GNUPLOT_COMMON)
+        out.write(
             """
 set output 'day_of_week.png'
 unset key
@@ -1359,12 +1357,12 @@ set grid y
 set ylabel "Commits"
 plot 'day_of_week.dat' using 1:3:(0.5):xtic(2) w boxes fs solid
 """)
-        f.close()
+        out.close()
 
         # Domains
-        f = open(path + '/domains.plot', 'w')
-        f.write(GNUPLOT_COMMON)
-        f.write(
+        out = open(path + '/domains.plot', 'w')
+        out.write(GNUPLOT_COMMON)
+        out.write(
             """
 set output 'domains.png'
 unset key
@@ -1374,12 +1372,12 @@ set grid y
 set ylabel "Commits"
 plot 'domains.dat' using 2:3:(0.5) with boxes fs solid, '' using 2:3:1 with labels rotate by 45 offset 0,1
 """)
-        f.close()
+        out.close()
 
         # Month of Year
-        f = open(path + '/month_of_year.plot', 'w')
-        f.write(GNUPLOT_COMMON)
-        f.write(
+        out = open(path + '/month_of_year.plot', 'w')
+        out.write(GNUPLOT_COMMON)
+        out.write(
             """
 set output 'month_of_year.png'
 unset key
@@ -1389,12 +1387,12 @@ set grid y
 set ylabel "Commits"
 plot 'month_of_year.dat' using 1:2:(0.5) w boxes fs solid
 """)
-        f.close()
+        out.close()
 
         # commits_by_year_month
-        f = open(path + '/commits_by_year_month.plot', 'w')
-        f.write(GNUPLOT_COMMON)
-        f.write(
+        out = open(path + '/commits_by_year_month.plot', 'w')
+        out.write(GNUPLOT_COMMON)
+        out.write(
             """
 set output 'commits_by_year_month.png'
 unset key
@@ -1407,12 +1405,12 @@ set grid y
 set ylabel "Commits"
 plot 'commits_by_year_month.dat' using 1:2:(0.5) w boxes fs solid
 """)
-        f.close()
+        out.close()
 
         # commits_by_year
-        f = open(path + '/commits_by_year.plot', 'w')
-        f.write(GNUPLOT_COMMON)
-        f.write(
+        out = open(path + '/commits_by_year.plot', 'w')
+        out.write(GNUPLOT_COMMON)
+        out.write(
             """
 set output 'commits_by_year.png'
 unset key
@@ -1422,12 +1420,12 @@ set ylabel "Commits"
 set yrange [0:]
 plot 'commits_by_year.dat' using 1:2:(0.5) w boxes fs solid
 """)
-        f.close()
+        out.close()
 
         # Files by date
-        f = open(path + '/files_by_date.plot', 'w')
-        f.write(GNUPLOT_COMMON)
-        f.write(
+        out = open(path + '/files_by_date.plot', 'w')
+        out.write(GNUPLOT_COMMON)
+        out.write(
             """
 set output 'files_by_date.png'
 unset key
@@ -1441,12 +1439,12 @@ set ytics autofreq
 set bmargin 6
 plot 'files_by_date.dat' using 1:2 w steps
 """)
-        f.close()
+        out.close()
 
         # Lines of Code
-        f = open(path + '/lines_of_code.plot', 'w')
-        f.write(GNUPLOT_COMMON)
-        f.write(
+        out = open(path + '/lines_of_code.plot', 'w')
+        out.write(GNUPLOT_COMMON)
+        out.write(
             """
 set output 'lines_of_code.png'
 unset key
@@ -1459,12 +1457,12 @@ set xtics rotate
 set bmargin 6
 plot 'lines_of_code.dat' using 1:2 w lines
 """)
-        f.close()
+        out.close()
 
         # Lines of Code Added per author
-        f = open(path + '/lines_of_code_by_author.plot', 'w')
-        f.write(GNUPLOT_COMMON)
-        f.write(
+        out = open(path + '/lines_of_code_by_author.plot', 'w')
+        out.write(GNUPLOT_COMMON)
+        out.write(
             """
 set terminal png transparent size 640,480
 set output 'lines_of_code_by_author.png'
@@ -1480,23 +1478,23 @@ plot """
         )
         i = 1
         plots = []
-        for a in self.authors_to_plot:
+        for author in self.authors_to_plot:
             i = i + 1
             plots.append(
                 """'lines_of_code_by_author.dat' using 1:%d title "%s" w lines""" %
                 (i,
-                 a.replace(
+                 author.replace(
                      "\"",
                      "\\\"")))
-        f.write(", ".join(plots))
-        f.write('\n')
+        out.write(", ".join(plots))
+        out.write('\n')
 
-        f.close()
+        out.close()
 
         # Commits per author
-        f = open(path + '/commits_by_author.plot', 'w')
-        f.write(GNUPLOT_COMMON)
-        f.write(
+        out = open(path + '/commits_by_author.plot', 'w')
+        out.write(GNUPLOT_COMMON)
+        out.write(
             """
 set terminal png transparent size 640,480
 set output 'commits_by_author.png'
@@ -1520,15 +1518,15 @@ plot """
                  a.replace(
                      "\"",
                      "\\\"")))
-        f.write(", ".join(plots))
-        f.write('\n')
+        out.write(", ".join(plots))
+        out.write('\n')
 
-        f.close()
+        out.close()
 
         os.chdir(path)
         files = glob.glob(path + '/*.plot')
-        for f in files:
-            out = getpipeoutput([gnuplot_cmd + ' "%s"' % f])
+        for filename in files:
+            out = getpipeoutput([gnuplot_cmd + ' "%s"' % filename])
             if len(out) > 0:
                 print out
 
