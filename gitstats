@@ -70,15 +70,6 @@ def getpipeoutput(cmds):
     end = time.time()
     return output.rstrip()
 
-
-def getcommitrange(end_only=False):
-    if len(conf['commit_end']) > 0:
-        if end_only or len(conf['commit_begin']) == 0:
-            return conf['commit_end']
-        return '%s..%s' % (conf['commit_begin'], conf['commit_end'])
-    return "HEAD"
-
-
 def getkeyssortedbyvalues(dict):
     return map(
         lambda el: el[1],
@@ -97,7 +88,7 @@ def getversion():
     global VERSION
     if VERSION == 0:
         VERSION = getpipeoutput(
-            ["git rev-parse --short %s" % getcommitrange()]
+            ["git rev-parse --short HEAD"]
         ).split('\n')[0]
 
     return VERSION
@@ -258,8 +249,7 @@ class GitDataCollector(DataCollector):
 
         try:
             self.total_authors += int(
-                getpipeoutput(['git shortlog -s %s' % getcommitrange(),
-                               'wc -l'])
+                getpipeoutput(['git shortlog -s HEAD', 'wc -l'])
             )
         except:
             self.total_authors = 0
@@ -309,11 +299,10 @@ class GitDataCollector(DataCollector):
 
         # Collect revision statistics
         # Outputs "<stamp> <date> <time> <timezone> <author> '<' <mail> '>'"
-        lines = getpipeoutput(
-            [
-                'git rev-list --pretty=format:"%%at %%ai %%aN <%%aE>" %s' %
-                getcommitrange(),
-                'grep -v ^commit']).split('\n')
+        lines = getpipeoutput([
+            'git rev-list --pretty=format:"%at %ai %aN <%aE>" HEAD',
+            'grep -v ^commit'
+        ]).split('\n')
         for line in lines:
             parts = line.split(' ', 4)
             author = ''
@@ -438,7 +427,7 @@ class GitDataCollector(DataCollector):
         # TODO Optimize this, it's the worst bottleneck
         # outputs "<stamp> <files>" for each revision
         revlines = getpipeoutput([
-            'git rev-list --pretty=format:"%%at %%T" %s' % getcommitrange(),
+            'git rev-list --pretty=format:"%at %T" HEAD',
             'grep -v ^commit'
         ]).strip().split('\n')
         lines = []
@@ -460,7 +449,7 @@ class GitDataCollector(DataCollector):
 
         # extensions
         lines = getpipeoutput([
-            'git ls-tree -r -z %s' % getcommitrange(end_only=True)
+            'git ls-tree -r -z HEAD'
         ]).split('\000')
 
         for line in lines:
@@ -500,10 +489,11 @@ class GitDataCollector(DataCollector):
         if conf['linear_linestats']:
             extra = '--first-parent -m'
 
-        lines = getpipeoutput(
-            [
-                'git log --numstat %s --pretty=format:"%%at %%aN" %s' %
-                (extra, getcommitrange())]).split('\n')
+        lines = getpipeoutput([
+                'git log --numstat %s --pretty=format:"%%at %%aN" HEAD' %
+                (extra)
+        ]).split('\n')
+
         lines.reverse()
         files = 0
         inserted = 0
@@ -563,10 +553,9 @@ class GitDataCollector(DataCollector):
         # (we need to walk through every commit to know who
         # committed what, not just through mainline)
 
-        lines = getpipeoutput(
-            [
-                'git log --numstat --date-order --pretty=format:"%%at %%aN" %s' %
-                (getcommitrange())]).split('\n')
+        lines = getpipeoutput([
+            'git log --numstat --date-order --pretty=format:"%at %aN" HEAD'
+        ]).split('\n')
         lines.reverse()
         files = 0
         inserted = 0
