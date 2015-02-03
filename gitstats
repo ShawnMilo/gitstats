@@ -45,8 +45,6 @@ conf = {
     'style': 'gitstats.css',
     'max_authors': 20,
     'authors_top': 5,
-    'commit_begin': '',
-    'commit_end': 'HEAD',
     'linear_linestats': 1,
     'project_name': '',
     'exclude_extensions': 'png,gif,pdf,json,csv,jpg,sh,txt',
@@ -478,16 +476,8 @@ class GitDataCollector(DataCollector):
 
             self.total_files += 1
 
-        # line statistics
-        # outputs:
-        #  N files changed, N insertions (+), N deletions(-)
-        # <stamp> <author>
         self.changes_by_date = {}  # stamp -> { files, ins, del }
-        # computation of lines of code by date is better done
-        # on a linear history.
-        extra = ''
-        if conf['linear_linestats']:
-            extra = '--first-parent -m'
+        extra = '--first-parent -m'
 
         lines = getpipeoutput([
                 'git log --numstat %s --pretty=format:"%%at %%aN" HEAD' %
