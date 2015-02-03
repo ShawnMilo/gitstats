@@ -26,8 +26,6 @@ GNUPLOT_COMMON = \
     'set terminal png transparent size 640,240\nset size 1.0,1.0\n'
 WEEKDAYS = ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
 
-time_start = time.time()
-
 # By default, gnuplot is searched from path, but can be overridden with the
 # environment variable "GNUPLOT"
 gnuplot_cmd = 'gnuplot'
@@ -62,12 +60,9 @@ def getpipeoutput(cmds):
     end = time.time()
     return output.rstrip()
 
-def getkeyssortedbyvalues(dict):
-    return map(
-        lambda el: el[1],
-        sorted(map(lambda el: (el[1], el[0]), dict.items()))
-    )
-
+def getkeyssortedbyvalues(authors):
+    recs = [(count, author) for author, count in authors.items()]
+    return [x[1] for x in sorted(recs)]
 
 def getkeyssortedbyvaluekey(d, key):
     return map(
