@@ -20,13 +20,7 @@ import time
 import zlib
 from collections import defaultdict
 import urllib
-import logging
 import tempfile
-
-logger = logging.getLogger('gitstats')
-log_path = os.path.join(tempfile.gettempdir(), 'gitstats.log')
-logger.addHandler(logging.FileHandler(log_path))
-logger.setLevel(logging.DEBUG)
 
 GNUPLOT_COMMON = \
     'set terminal png transparent size 640,240\nset size 1.0,1.0\n'
@@ -746,13 +740,13 @@ class HTMLReportCreator(ReportCreator):
 
         f = open(os.path.join(path, "index.html"), 'w')
         format = '%Y-%m-%d %H:%M:%S'
-        self.printHeader(f)
+        self.print_header(f)
 
         out = []
 
         out.append('<h1>GitStats - %s</h1>' % data.projectname)
 
-        out.append(self.printNav())
+        out.append(self.print_nav())
 
         out.append('<dl>')
         out.append('<dt>Project name</dt><dd>%s</dd>' % (data.projectname))
@@ -797,9 +791,9 @@ class HTMLReportCreator(ReportCreator):
         # Activity
         f = open(path + '/activity.html', 'w')
         out = []
-        self.printHeader(f)
+        self.print_header(f)
         out.append('<h1>Activity</h1>')
-        out.append(self.printNav())
+        out.append(self.print_nav())
 
         #out.append('<h2>Last 30 days</h2>')
 
@@ -1032,10 +1026,10 @@ class HTMLReportCreator(ReportCreator):
         # Authors
         out = []
         f = open(path + '/authors.html', 'w')
-        self.printHeader(f)
+        self.print_header(f)
 
         out.append('<h1>Authors</h1>')
-        out.append(self.printNav())
+        out.append(self.print_nav())
 
         # Authors :: List of authors
         out.append(html_header(2, 'List of Authors'))
@@ -1207,9 +1201,9 @@ class HTMLReportCreator(ReportCreator):
         # Files
         out = []
         f = open(path + '/files.html', 'w')
-        self.printHeader(f)
+        self.print_header(f)
         out.append('<h1>Files</h1>')
-        out.append(self.printNav())
+        out.append(self.print_nav())
 
         out.append('<dl>\n')
         out.append('<dt>Total files</dt><dd>%d</dd>' % data.getTotalFiles())
@@ -1217,7 +1211,7 @@ class HTMLReportCreator(ReportCreator):
 
         try:
             average_size = (100.0 * data.getTotalLOC()) / data.getTotalFiles()
-        except ZeroDivisionError as ex:
+        except ZeroDivisionError:
             average_size = 0.0
         out.append(
             '<dt>Average file size</dt><dd>%.2f bytes</dd>' %
@@ -1271,9 +1265,9 @@ class HTMLReportCreator(ReportCreator):
         # Lines
         f = open(path + '/lines.html', 'w')
         out = []
-        self.printHeader(f)
+        self.print_header(f)
         out.append('<h1>Lines</h1>')
-        out.append(self.printNav())
+        out.append(self.print_nav())
 
         out.append('<dl>\n')
         out.append('<dt>Total lines</dt><dd>%d</dd>' % data.getTotalLOC())
@@ -1300,9 +1294,9 @@ class HTMLReportCreator(ReportCreator):
         # tags.html
         out = []
         f = open(path + '/tags.html', 'w')
-        self.printHeader(f)
+        self.print_header(f)
         out.append('<h1>Tags</h1>')
-        out.append(self.printNav())
+        out.append(self.print_nav())
 
         out.append('<dl>')
         out.append('<dt>Total tags</dt><dd>%d</dd>' % len(data.tags))
@@ -1543,8 +1537,8 @@ plot """
             if len(out) > 0:
                 print out
 
-    def printHeader(self, f, title=''):
-        f.write(
+    def print_header(self, output):
+        output.write(
             """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -1557,7 +1551,7 @@ plot """
 <body>
 """ % (self.title, conf['style'], getversion()))
 
-    def printNav(self):
+    def print_nav(self):
         return """
 <div class="nav">
 <ul>
