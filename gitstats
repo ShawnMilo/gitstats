@@ -152,14 +152,14 @@ class DataCollector:
         if not os.path.exists(cachefile):
             return
         print 'Loading cache...'
-        f = open(cachefile, 'rb')
+        cache = open(cachefile, 'rb')
         try:
-            self.cache = pickle.loads(zlib.decompress(f.read()))
+            self.cache = pickle.loads(zlib.decompress(cache.read()))
         except:
             # temporary hack to upgrade non-compressed caches
-            f.seek(0)
-            self.cache = pickle.load(f)
-        f.close()
+            cache.seek(0)
+            self.cache = pickle.load(cache)
+        cache.close()
 
     # Produce any additional statistics from the extracted data.
     def refine(self):
@@ -374,14 +374,14 @@ class GitDataCollector(DataCollector):
             self.commits_by_month[
                 yymm] = self.commits_by_month.get(yymm, 0) + 1
 
-            yy = date.year
-            if yy in self.author_of_year:
-                self.author_of_year[yy][author] = self.author_of_year[
-                    yy].get(author, 0) + 1
+            year = date.year
+            if year in self.author_of_year:
+                self.author_of_year[year][author] = self.author_of_year[
+                    year].get(author, 0) + 1
             else:
-                self.author_of_year[yy] = {}
-                self.author_of_year[yy][author] = 1
-            self.commits_by_year[yy] = self.commits_by_year.get(yy, 0) + 1
+                self.author_of_year[year] = {}
+                self.author_of_year[year][author] = 1
+            self.commits_by_year[year] = self.commits_by_year.get(year, 0) + 1
 
             # authors: active days
             yymmdd = date.strftime('%Y-%m-%d')
@@ -450,9 +450,8 @@ class GitDataCollector(DataCollector):
             self.extensions[ext]['files'] += 1
             try:
                 self.extensions[ext]['lines'] += self.getLinesInBlob(sha1)
-            except:
-                print 'Warning: Could not count lines for file "%s"' % line
-
+            except ValueError as ex:
+                print "this is messed up! {0}".format(ex)
             self.total_files += 1
 
         self.changes_by_date = {}  # stamp -> { files, ins, del }
@@ -723,9 +722,9 @@ class HTMLReportCreator(ReportCreator):
             else:
                 print 'Warning: "%s" not found, so not copied (searched: %s)' % (file, basedirs)
 
-        f = open(os.path.join(path, "index.html"), 'w')
+        outfile = open(os.path.join(path, "index.html"), 'w')
         format = '%Y-%m-%d %H:%M:%S'
-        self.print_header(f)
+        self.print_header(outfile)
 
         out = []
 
@@ -769,38 +768,34 @@ class HTMLReportCreator(ReportCreator):
         out.append('</dl>')
 
         out.append('</body>\n</html>')
-        f.write('\n'.join(out))
-        f.close()
+        outfile.write('\n'.join(out))
+        outfile.close()
 
         ###
         # Activity
-        f = open(path + '/activity.html', 'w')
+        outfile = open(path + '/activity.html', 'w')
         out = []
-        self.print_header(f)
+        self.print_header(outfile)
         out.append('<h1>Activity</h1>')
         out.append(print_nav())
 
-        #out.append('<h2>Last 30 days</h2>')
-
-        #out.append('<h2>Last 12 months</h2>')
-
         # Weekly activity
-        WEEKS = 32
+        num_weeks = 32
         out.append(html_header(2, 'Weekly activity'))
-        out.append('<p>Last %d weeks</p>' % WEEKS)
+        out.append('<p>Last %d weeks</p>' % num_weeks)
 
         # generate weeks to show (previous N weeks from now)
         now = datetime.now()
         deltaweek = timedelta(days=7)
         weeks = []
         stampcur = now
-        for i in range(0, WEEKS):
+        for i in range(0, num_weeks):
             weeks.insert(0, stampcur.strftime('%Y-%W'))
             stampcur -= deltaweek
 
         # top row: commits & bar
         out.append('<table class="noborders"><tr>')
-        for i in range(0, WEEKS):
+        for i in range(0, num_weeks):
             commits = 0
             if weeks[i] in data.activity_by_year_week:
                 commits = data.activity_by_year_week[weeks[i]]
@@ -811,14 +806,16 @@ class HTMLReportCreator(ReportCreator):
                     data.activity_by_year_week[
                         weeks[i]]) / data.activity_by_year_week_peak
             height = max(1, int(200 * percentage))
-            out.append(
-                '<td style="text-align: center; vertical-align: bottom">%d<div style="display: block; background-color: red; width: 20px; height: %dpx"></div></td>' %
-                (commits, height))
+            out.append((
+                '<td style="text-align: center; vertical-align: bottom">'
+                '%d<div style="display: block; background-color: red; '
+                'width: 20px; height: %dpx"></div></td>'
+            ) % (commits, height))
 
         # bottom row: year/week
         out.append('</tr><tr>')
-        for i in range(0, WEEKS):
-            out.append('<td>%s</td>' % (WEEKS - i))
+        for i in range(0, num_weeks):
+            out.append('<td>%s</td>' % (num_weeks - i))
         out.append('</tr></table>')
 
         # Hour of Day
@@ -828,76 +825,76 @@ class HTMLReportCreator(ReportCreator):
         for i in range(0, 24):
             out.append('<th>%d</th>' % i)
         out.append('</tr>\n<tr><th>Commits</th>')
-        fp = open(path + '/hour_of_day.dat', 'w')
+        filehandle = open(path + '/hour_of_day.dat', 'w')
         out2 = []
         for i in range(0, 24):
             if i in hour_of_day:
-                r = 127 + \
+                red = 127 + \
                     int((float(hour_of_day[i]) /
                          data.activity_by_hour_of_day_busiest) *
                         128)
                 out.append(
                     '<td style="background-color: rgb(%d, 0, 0)">%d</td>' %
-                    (r, hour_of_day[i]))
+                    (red, hour_of_day[i]))
                 out2.append('%d %d\n' % (i, hour_of_day[i]))
             else:
                 out.append('<td>0</td>')
                 out2.append('%d 0\n' % i)
-        fp.write('\n'.join(out2))
+        filehandle.write('\n'.join(out2))
         del out2
-        fp.close()
+        filehandle.close()
         out.append('</tr>\n<tr><th>%</th>')
         totalcommits = data.getTotalCommits()
         for i in range(0, 24):
             if i in hour_of_day:
-                r = 127 + \
+                red = 127 + \
                     int((float(hour_of_day[i]) /
                          data.activity_by_hour_of_day_busiest) *
                         128)
                 out.append(
                     '<td style="background-color: rgb(%d, 0, 0)">%.2f</td>' %
-                    (r, (100.0 * hour_of_day[i]) / totalcommits))
+                    (red, (100.0 * hour_of_day[i]) / totalcommits))
             else:
                 out.append('<td>0.00</td>')
         out.append('</tr></table>')
         out.append('<img src="hour_of_day.png" alt="Hour of Day" />')
-        fg = open(path + '/hour_of_day.dat', 'w')
+        hours_file = open(path + '/hour_of_day.dat', 'w')
         out2 = []
         for i in range(0, 24):
             if i in hour_of_day:
                 out2.append('%d %d\n' % (i + 1, hour_of_day[i]))
             else:
                 out2.append('%d 0\n' % (i + 1))
-        fg.write('\n'.join(out2))
+        hours_file.write('\n'.join(out2))
         del out2
-        fg.close()
+        hours_file.close()
 
         # Day of Week
         out.append(html_header(2, 'Day of Week'))
         day_of_week = data.getActivityByDayOfWeek()
         out.append('<div class="vtable"><table>')
         out.append('<tr><th>Day</th><th>Total (%)</th></tr>')
-        fp = open(path + '/day_of_week.dat', 'w')
+        dow_file = open(path + '/day_of_week.dat', 'w')
         out2 = []
-        for d in range(0, 7):
+        for i in range(0, 7):
             commits = 0
-            if d in day_of_week:
-                commits = day_of_week[d]
-            out2.append('%d %s %d\n' % (d + 1, WEEKDAYS[d], commits))
+            if i in day_of_week:
+                commits = day_of_week[i]
+            out2.append('%d %s %d\n' % (i + 1, WEEKDAYS[i], commits))
             out.append('<tr>')
-            out.append('<th>%s</th>' % (WEEKDAYS[d]))
-            if d in day_of_week:
+            out.append('<th>%s</th>' % (WEEKDAYS[i]))
+            if i in day_of_week:
                 out.append(
                     '<td>%d (%.2f%%)</td>' %
-                    (day_of_week[d], (100.0 * day_of_week[d]) / totalcommits))
+                    (day_of_week[i], (100.0 * day_of_week[i]) / totalcommits))
             else:
                 out.append('<td>0</td>')
             out.append('</tr>')
         out.append('</table></div>')
         out.append('<img src="day_of_week.png" alt="Day of Week" />')
-        fp.write('\n'.join(out2))
+        dow_file.write('\n'.join(out2))
         del out2
-        fp.close()
+        dow_file.close()
 
         # Hour of Week
         out.append(html_header(2, 'Hour of Week'))
@@ -917,11 +914,11 @@ class HTMLReportCreator(ReportCreator):
                     commits = 0
                 if commits != 0:
                     out.append('<td')
-                    r = 127 + \
+                    red = 127 + \
                         int((float(commits) /
                              data.activity_by_hour_of_week_busiest) *
                             128)
-                    out.append(' style="background-color: rgb(%d, 0, 0)"' % r)
+                    out.append(' style="background-color: rgb(%d, 0, 0)"' % red)
                     out.append('>%d</td>' % commits)
                 else:
                     out.append('<td></td>')
@@ -933,19 +930,19 @@ class HTMLReportCreator(ReportCreator):
         out.append(html_header(2, 'Month of Year'))
         out.append('<div class="vtable"><table>')
         out.append('<tr><th>Month</th><th>Commits (%)</th></tr>')
-        fp = open(path + '/month_of_year.dat', 'w')
+        moy_file = open(path + '/month_of_year.dat', 'w')
         out2 = []
-        for mm in range(1, 13):
+        for i in range(1, 13):
             commits = 0
-            if mm in data.activity_by_month_of_year:
-                commits = data.activity_by_month_of_year[mm]
+            if i in data.activity_by_month_of_year:
+                commits = data.activity_by_month_of_year[i]
             out.append(
                 '<tr><td>%d</td><td>%d (%.2f %%)</td></tr>' %
-                (mm, commits, (100.0 * commits) / data.getTotalCommits()))
-            out2.append('%d %d\n' % (mm, commits))
-        fp.write('\n'.join(out2))
+                (i, commits, (100.0 * commits) / data.getTotalCommits()))
+            out2.append('%d %d\n' % (i, commits))
+        moy_file.write('\n'.join(out2))
         del out2
-        fp.close()
+        moy_file.close()
         out.append('</table></div>')
         out.append('<img src="month_of_year.png" alt="Month of Year" />')
 
@@ -972,20 +969,20 @@ class HTMLReportCreator(ReportCreator):
         out.append(html_header(2, 'Commits by Year'))
         out.append(
             '<div class="vtable"><table><tr><th>Year</th><th>Commits (% of all)</th></tr>')
-        for yy in reversed(sorted(data.commits_by_year.keys())):
+        for year in reversed(sorted(data.commits_by_year.keys())):
             out.append(
                 '<tr><td>%s</td><td>%d (%.2f%%)</td></tr>' %
-                (yy,
-                 data.commits_by_year[yy],
+                (year,
+                 data.commits_by_year[year],
                  (100.0 *
-                  data.commits_by_year[yy]) /
+                  data.commits_by_year[year]) /
                     data.getTotalCommits()))
         out.append('</table></div>')
         out.append('<img src="commits_by_year.png" alt="Commits by Year" />')
         fg = open(path + '/commits_by_year.dat', 'w')
         out2 = []
-        for yy in sorted(data.commits_by_year.keys()):
-            out2.append('%d %d\n' % (yy, data.commits_by_year[yy]))
+        for year in sorted(data.commits_by_year.keys()):
+            out2.append('%d %d\n' % (year, data.commits_by_year[year]))
         fg.write('\n'.join(out2))
         del out2
         fg.close()
@@ -997,21 +994,21 @@ class HTMLReportCreator(ReportCreator):
         max_commits_on_tz = max(data.commits_by_timezone.values())
         for i in sorted(data.commits_by_timezone.keys(), key=lambda n: int(n)):
             commits = data.commits_by_timezone[i]
-            r = 127 + int((float(commits) / max_commits_on_tz) * 128)
+            red = 127 + int((float(commits) / max_commits_on_tz) * 128)
             out.append(
                 '<tr><th>%s</th><td style="background-color: rgb(%d, 0, 0)">%d</td></tr>' %
-                (i, r, commits))
+                (i, red, commits))
         out.append('</tr></table>')
 
         out.append('</body></html>')
-        f.write('\n'.join(out))
-        f.close()
+        outfile.write('\n'.join(out))
+        outfile.close()
 
         ###
         # Authors
         out = []
-        f = open(path + '/authors.html', 'w')
-        self.print_header(f)
+        outfile = open(path + '/authors.html', 'w')
+        self.print_header(outfile)
 
         out.append('<h1>Authors</h1>')
         out.append(print_nav())
@@ -1020,31 +1017,39 @@ class HTMLReportCreator(ReportCreator):
         out.append(html_header(2, 'List of Authors'))
 
         out.append('<table class="authors sortable" id="authors">')
-        out.append(
-            '<tr><th>Author</th><th>Commits (%)</th><th>+ lines</th><th>- lines</th><th>First commit</th><th>Last commit</th><th class="unsortable">Age</th><th>Active days</th><th># by commits</th></tr>')
+        out.append((
+            '<tr><th>Author</th><th>Commits (%)</th><th>+ lines</th><th>- '
+            'lines</th><th>First commit</th><th>Last commit</th><th '
+            'class="unsortable">Age</th><th>Active days</th><th># '
+            'by commits</th></tr>'
+        ))
         for author in data.getAuthors(conf['max_authors']):
             info = data.getAuthorInfo(author)
-            out.append(
-                '<tr><td>%s</td><td>%d (%.2f%%)</td><td>%d</td><td>%d</td><td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%d</td></tr>' %
-                (author,
-                 info['commits'],
-                    info['commits_frac'],
-                    info['lines_added'],
-                    info['lines_removed'],
-                    info['date_first'],
-                    info['date_last'],
-                    info['timedelta'],
-                    len(
-                     info['active_days']),
-                    info['place_by_commits']))
+            out.append((
+                '<tr><td>%s</td><td>%d (%.2f%%)</td><td>%d</td><td>%d</td>'
+                '<td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%d</td></tr>'
+            ) % (
+                author,
+                info['commits'],
+                info['commits_frac'],
+                info['lines_added'],
+                info['lines_removed'],
+                info['date_first'],
+                info['date_last'],
+                info['timedelta'],
+                len(info['active_days']),
+                info['place_by_commits'],
+            ))
         out.append('</table>')
 
         allauthors = data.getAuthors()
         if len(allauthors) > conf['max_authors']:
             rest = allauthors[conf['max_authors']:]
-            out.append(
-                '<p class="moreauthors">These didn\'t make it to the top: %s</p>' %
-                ', '.join(rest))
+            out.append((
+                "<p class='moreauthors'>These didn't make it to "
+                "the top: %s</p>" 
+                ) % ', '.join(rest)
+            )
 
         out.append(html_header(2, 'Cumulated Added Lines of Code per Author'))
         out.append(
@@ -1133,21 +1138,21 @@ class HTMLReportCreator(ReportCreator):
         out.append(
             '<table class="sortable" id="aoy"><tr><th>Year</th><th>Author</th><th>Commits (%%)</th><th class="unsortable">Next top %d</th><th>Number of authors</th></tr>' %
             conf['authors_top'])
-        for yy in reversed(sorted(data.author_of_year.keys())):
-            authordict = data.author_of_year[yy]
+        for year in reversed(sorted(data.author_of_year.keys())):
+            authordict = data.author_of_year[year]
             authors = getkeyssortedbyvalues(authordict)
             authors.reverse()
-            commits = data.author_of_year[yy][authors[0]]
+            commits = data.author_of_year[year][authors[0]]
             next = ', '.join(authors[1:conf['authors_top'] + 1])
             out.append(
                 '<tr><td>%s</td><td>%s</td><td>%d (%.2f%% of %d)</td><td>%s</td><td>%d</td></tr>' %
-                (yy,
+                (year,
                  authors[0],
                     commits,
                     (100.0 *
                      commits) /
-                    data.commits_by_year[yy],
-                    data.commits_by_year[yy],
+                    data.commits_by_year[year],
+                    data.commits_by_year[year],
                     next,
                     len(authors)))
         out.append('</table>')
@@ -1158,7 +1163,7 @@ class HTMLReportCreator(ReportCreator):
         domains_by_commits.reverse()  # most first
         out.append('<div class="vtable"><table>')
         out.append('<tr><th>Domains</th><th>Total (%)</th></tr>')
-        fp = open(path + '/domains.dat', 'w')
+        domain_file = open(path + '/domains.dat', 'w')
         out2 = []
         n = 0
         for domain in domains_by_commits:
@@ -1173,20 +1178,20 @@ class HTMLReportCreator(ReportCreator):
                 (domain, info['commits'], (100.0 * info['commits'] / totalcommits)))
         out.append('</table></div>')
         out.append('<img src="domains.png" alt="Commits by Domains" />')
-        fp.write('\n'.join(out2))
+        domain_file.write('\n'.join(out2))
         del out2
-        fp.close()
+        domain_file.close()
 
         out.append('</body></html>')
 
-        f.write('\n'.join(out))
-        f.close()
+        outfile.write('\n'.join(out))
+        outfile.close()
 
         ###
         # Files
         out = []
-        f = open(path + '/files.html', 'w')
-        self.print_header(f)
+        outfile = open(path + '/files.html', 'w')
+        self.print_header(outfile)
         out.append('<h1>Files</h1>')
         out.append(print_nav())
 
@@ -1243,14 +1248,14 @@ class HTMLReportCreator(ReportCreator):
         out.append('</table>')
 
         out.append('</body></html>')
-        f.write('\n'.join(out))
-        f.close()
+        outfile.write('\n'.join(out))
+        outfile.close()
 
         ###
         # Lines
-        f = open(path + '/lines.html', 'w')
+        outfile = open(path + '/lines.html', 'w')
         out = []
-        self.print_header(f)
+        self.print_header(outfile)
         out.append('<h1>Lines</h1>')
         out.append(print_nav())
 
@@ -1272,14 +1277,14 @@ class HTMLReportCreator(ReportCreator):
         fg.close()
 
         out.append('</body></html>')
-        f.write('\n'.join(out))
-        f.close()
+        outfile.write('\n'.join(out))
+        outfile.close()
 
         ###
         # tags.html
         out = []
-        f = open(path + '/tags.html', 'w')
-        self.print_header(f)
+        outfile = open(path + '/tags.html', 'w')
+        self.print_header(outfile)
         out.append('<h1>Tags</h1>')
         out.append(print_nav())
 
@@ -1313,8 +1318,8 @@ class HTMLReportCreator(ReportCreator):
         out.append('</table>')
 
         out.append('</body></html>')
-        f.write('\n'.join(out))
-        f.close()
+        outfile.write('\n'.join(out))
+        outfile.close()
 
         self.create_graphs(path)
 
