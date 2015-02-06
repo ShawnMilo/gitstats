@@ -83,7 +83,7 @@ def getgnuplotversion():
     return getpipeoutput(['gnuplot --version']).split('\n')[0]
 
 
-class DataCollector:
+class DataCollector(object):
 
     """Manages data collection from a revision control repository."""
 
@@ -410,7 +410,7 @@ class GitDataCollector(DataCollector):
         lines = []
         for revline in revlines:
             time, rev = revline.split(' ')
-            linecount = self.getFilesInCommit(rev)
+            linecount = self.files_in_commit(rev)
             lines.append('%d %d' % (int(time), linecount))
 
         self.total_commits += len(lines)
@@ -620,16 +620,13 @@ class GitDataCollector(DataCollector):
         res.reverse()
         return res[:limit]
 
-    def getCommitDeltaDays(self):
+    def get_commit_delta_days(self):
         return (self.last_commit_stamp - self.first_commit_stamp) / 86400 + 1
 
     def getDomainInfo(self, domain):
         return self.domains[domain]
 
-    def getDomains(self):
-        return self.domains.keys()
-
-    def getFilesInCommit(self, rev):
+    def files_in_commit(self, rev):
         try:
             res = self.cache['files_in_tree'][rev]
         except:
@@ -683,7 +680,7 @@ class GitDataCollector(DataCollector):
         return datetime.fromtimestamp(stamp).strftime('%Y-%m-%d')
 
 
-class ReportCreator:
+class ReportCreator(object):
 
     """Creates the actual report based on given data."""
 
@@ -696,6 +693,9 @@ class ReportCreator:
 
 
 def html_header(level, text):
+    """
+    Return a string for the HTML header.
+    """
     name = urllib.quote(text)
     return '\n<h%d><a href="#%s" name="%s">%s</a></h%d>\n\n' % (
         level, name, name, text, level)
@@ -747,9 +747,9 @@ class HTMLReportCreator(ReportCreator):
             (data.getFirstCommitDate().strftime(format),
              data.getLastCommitDate().strftime(format)))
         out.append('<dt>Age</dt><dd>%d days, %d active days (%3.2f%%)</dd>' %
-                   (data.getCommitDeltaDays(), len(data.getActiveDays()), (100.0 *
+                   (data.get_commit_delta_days(), len(data.getActiveDays()), (100.0 *
                                                                            len(data.getActiveDays()) /
-                                                                           data.getCommitDeltaDays())))
+                                                                           data.get_commit_delta_days())))
         out.append('<dt>Total Files</dt><dd>%s</dd>' % data.getTotalFiles())
         out.append(
             '<dt>Total Lines of Code</dt><dd>%s (%d added, %d removed)</dd>' %
@@ -761,7 +761,7 @@ class HTMLReportCreator(ReportCreator):
             (data.getTotalCommits(), float(
                 data.getTotalCommits()) / len(
                 data.getActiveDays()), float(
-                data.getTotalCommits()) / data.getCommitDeltaDays()))
+                data.getTotalCommits()) / data.get_commit_delta_days()))
         out.append(
             '<dt>Authors</dt><dd>%s (average %.1f commits per author)</dd>' %
             (data.getTotalAuthors(), (1.0 * data.getTotalCommits()) / data.getTotalAuthors()))
@@ -957,13 +957,13 @@ class HTMLReportCreator(ReportCreator):
         out.append('</table></div>')
         out.append(
             '<img src="commits_by_year_month.png" alt="Commits by year/month" />')
-        fg = open(path + '/commits_by_year_month.dat', 'w')
+        cby_file = open(path + '/commits_by_year_month.dat', 'w')
         out2 = []
         for yymm in sorted(data.commits_by_month.keys()):
             out2.append('%s %s\n' % (yymm, data.commits_by_month[yymm]))
-        fg.write('\n'.join(out2))
+        cby_file.write('\n'.join(out2))
         del out2
-        fg.close()
+        cby_file.close()
 
         # Commits by year
         out.append(html_header(2, 'Commits by Year'))
