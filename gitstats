@@ -159,23 +159,6 @@ class DataCollector(object):
             self.cache = pickle.load(cache)
         cache.close()
 
-    # Produce any additional statistics from the extracted data.
-    def refine(self):
-        pass
-
-    # : get a dictionary of author
-    def getAuthorInfo(self, author):
-        return None
-
-    # : get a dictionary of domains
-    def getDomainInfo(self, domain):
-        return None
-
-    ##
-    # Get a list of authors
-    def getAuthors(self):
-        return []
-
     def getFirstCommitDate(self):
         return datetime.now()
 
