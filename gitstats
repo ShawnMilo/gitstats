@@ -81,7 +81,6 @@ def getgitversion():
 def getgnuplotversion():
     return getpipeoutput(['gnuplot --version']).split('\n')[0]
 
-
 class DataCollector(object):
 
     """Manages data collection from a revision control repository."""
@@ -191,21 +190,6 @@ class DataCollector(object):
 
     def getStampCreated(self):
         return self.stamp_created
-
-    def getTags(self):
-        return []
-
-    def get_total_authors(self):
-        return -1
-
-    def get_total_commits(self):
-        return -1
-
-    def get_total_files(self):
-        return -1
-
-    def total_loc(self):
-        return -1
 
     def save_cache(self, cachefile):
         print 'Saving cache...'
@@ -669,11 +653,6 @@ class GitDataCollector(DataCollector):
     def total_loc(self):
         return self.total_lines
 
-    def revToDate(self, rev):
-        stamp = int(
-            getpipeoutput(['git log --pretty=format:%%at "%s" -n 1' % rev]))
-        return datetime.fromtimestamp(stamp).strftime('%Y-%m-%d')
-
 def html_header(level, text):
     """
     Return a string for the HTML header.
@@ -681,7 +660,6 @@ def html_header(level, text):
     name = urllib.quote(text)
     return '\n<h%d><a href="#%s" name="%s">%s</a></h%d>\n\n' % (
         level, name, name, text, level)
-
 
 class HTMLReportCreator(object):
 
@@ -692,6 +670,7 @@ class HTMLReportCreator(object):
         self.data = data
         self.path = path
         self.title = data.projectname
+        self.authors_to_plot = None
 
     def create(self):
         """
@@ -1525,6 +1504,9 @@ plot """
                 print out
 
     def print_header(self, output):
+        """
+        HTML header
+        """
         output.write(
             """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
