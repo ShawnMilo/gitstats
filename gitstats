@@ -159,9 +159,6 @@ class DataCollector(object):
             self.cache = pickle.load(cache)
         cache.close()
 
-    def getFirstCommitDate(self):
-        return datetime.now()
-
     def getLastCommitDate(self):
         return datetime.now()
 
