@@ -681,16 +681,12 @@ class GitDataCollector(DataCollector):
 
 
 class ReportCreator(object):
-
-    """Creates the actual report based on given data."""
-
-    def __init__(self):
-        pass
-
+    """
+    Creates the actual report based on given data.
+    """
     def create(self, data, path):
         self.data = data
         self.path = path
-
 
 def html_header(level, text):
     """
