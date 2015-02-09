@@ -260,8 +260,8 @@ class GitDataCollector(DataCollector):
             # most active hour?
             if self.activity_by_hour_of_day[
                     hour] > self.activity_by_hour_of_day_busiest:
-                self.activity_by_hour_of_day_busiest = self.activity_by_hour_of_day[
-                    hour]
+                self.activity_by_hour_of_day_busiest = \
+                    self.activity_by_hour_of_day[hour]
 
             # day of week
             day = date.weekday()
@@ -283,8 +283,8 @@ class GitDataCollector(DataCollector):
             # most active hour?
             if self.activity_by_hour_of_week[day][
                     hour] > self.activity_by_hour_of_week_busiest:
-                self.activity_by_hour_of_week_busiest = self.activity_by_hour_of_week[
-                    day][hour]
+                self.activity_by_hour_of_week_busiest = \
+                    self.activity_by_hour_of_week[day][hour]
 
             # month of year
             month = date.month
@@ -555,7 +555,7 @@ class GitDataCollector(DataCollector):
     def get_active_days(self):
         return self.active_days
 
-    def getActivityByDayOfWeek(self):
+    def get_activity_by_dow(self):
         return self.activity_by_day_of_week
 
     def getActivityByHourOfDay(self):
@@ -575,15 +575,18 @@ class GitDataCollector(DataCollector):
         """
         return (self.last_commit_stamp - self.first_commit_stamp) / 86400 + 1
 
-    def getDomainInfo(self, domain):
+    def get_domain_info(self, domain):
         return self.domains[domain]
 
     def files_in_commit(self, rev):
         try:
             res = self.cache['files_in_tree'][rev]
         except:
-            res = int(getpipeoutput(
-                ['git ls-tree -r --name-only "%s"' % rev, 'wc -l']).split('\n')[0])
+            res = int(
+                getpipeoutput(
+                    ['git ls-tree -r --name-only "%s"' % 
+                    rev, 'wc -l']).split('\n')[0]
+            )
             if 'files_in_tree' not in self.cache:
                 self.cache['files_in_tree'] = {}
             self.cache['files_in_tree'][rev] = res
@@ -601,7 +604,8 @@ class GitDataCollector(DataCollector):
             res = self.cache['lines_in_blob'][sha1]
         except:
             res = int(
-                getpipeoutput(['git cat-file blob %s' % sha1, 'wc -l']).split()[0])
+                getpipeoutput(
+                    ['git cat-file blob %s' % sha1, 'wc -l']).split()[0])
             if 'lines_in_blob' not in self.cache:
                 self.cache['lines_in_blob'] = {}
             self.cache['lines_in_blob'][sha1] = res
@@ -663,18 +667,16 @@ class HTMLReportCreator(object):
                     shutil.copyfile(src, os.path.join(path, filename))
                     break
             else:
-                print 'Warning: "%s" not found, so not copied (searched: %s)' % (filename, basedirs)
+                msg = 'Warning: "{0}" not found, so not copied (searched: {1})'
+                print msg.format(filename, basedirs)
 
         outfile = open(os.path.join(path, "index.html"), 'w')
         date_format = '%Y-%m-%d %H:%M:%S'
         self.print_header(outfile)
 
         out = []
-
         out.append('<h1>GitStats - %s</h1>' % data.projectname)
-
         out.append(print_nav())
-
         out.append('<dl>')
         out.append('<dt>Project name</dt><dd>%s</dd>' % (data.projectname))
         out.append(
@@ -814,7 +816,7 @@ class HTMLReportCreator(object):
 
         # Day of Week
         out.append(html_header(2, 'Day of Week'))
-        day_of_week = data.getActivityByDayOfWeek()
+        day_of_week = data.get_activity_by_dow()
         out.append('<div class="vtable"><table>')
         out.append('<tr><th>Day</th><th>Total (%)</th></tr>')
         dow_file = open(path + '/day_of_week.dat', 'w')
@@ -861,7 +863,8 @@ class HTMLReportCreator(object):
                         int((float(commits) /
                              data.activity_by_hour_of_week_busiest) *
                             128)
-                    out.append(' style="background-color: rgb(%d, 0, 0)"' % red)
+                    out.append(
+                        ' style="background-color: rgb(%d, 0, 0)"' % red)
                     out.append('>%d</td>' % commits)
                 else:
                     out.append('<td></td>')
@@ -892,7 +895,11 @@ class HTMLReportCreator(object):
         # Commits by year/month
         out.append(html_header(2, 'Commits by year/month'))
         out.append(
-            '<div class="vtable"><table><tr><th>Month</th><th>Commits</th></tr>')
+            (
+                '<div class="vtable"><table><tr><th>Month</th>'
+                '<th>Commits</th></tr>'
+            )
+        )
         for yymm in reversed(sorted(data.commits_by_month.keys())):
             out.append(
                 '<tr><td>%s</td><td>%d</td></tr>' %
@@ -1114,7 +1121,7 @@ class HTMLReportCreator(object):
                 break
             commits = 0
             i += 1
-            info = data.getDomainInfo(domain)
+            info = data.get_domain_info(domain)
             out2.append('%s %d %d\n' % (domain, i, info['commits']))
             out.append(
                 '<tr><th>%s</th><td>%d (%.2f%%)</td></tr>' %
