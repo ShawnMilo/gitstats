@@ -167,12 +167,6 @@ class DataCollector(object):
     def getAuthorInfo(self, author):
         return None
 
-    def getActivityByDayOfWeek(self):
-        return {}
-
-    def getActivityByHourOfDay(self):
-        return {}
-
     # : get a dictionary of domains
     def getDomainInfo(self, domain):
         return None
