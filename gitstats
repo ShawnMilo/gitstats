@@ -67,6 +67,12 @@ def getkeyssortedbyvaluekey(d, key):
     return map(
         lambda el: el[1], sorted(map(lambda el: (d[el][key], el), d.keys())))
 
+# This should be the main function to extract data from the repository.
+def collect(path):
+    if len(conf['project_name']) == 0:
+        return os.path.basename(os.path.abspath(path))
+    return conf['project_name']
+
 def getversion():
     """
     Return commit of current version of gitstats.
@@ -137,13 +143,6 @@ class DataCollector(object):
         # line statistics
         self.changes_by_date = defaultdict(dict)
 
-    # This should be the main function to extract data from the repository.
-    def collect(self, dir):
-        self.dir = dir
-        if len(conf['project_name']) == 0:
-            self.projectname = os.path.basename(os.path.abspath(dir))
-        else:
-            self.projectname = conf['project_name']
 
     # Load cacheable data
     def loadCache(self, cachefile):
@@ -172,7 +171,7 @@ class DataCollector(object):
 class GitDataCollector(DataCollector):
 
     def collect(self, dir):
-        DataCollector.collect(self, dir)
+        self.projectname = collect(dir)
 
         try:
             self.total_authors += int(
@@ -1561,6 +1560,7 @@ Default config values:
 
         print 'Collecting data...'
         data.collect(gitpath)
+
 
     print 'Refining data...'
     data.save_cache(cachefile)
