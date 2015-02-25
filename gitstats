@@ -173,12 +173,9 @@ class GitDataCollector(DataCollector):
     def collect(self, dir):
         self.projectname = collect(dir)
 
-        try:
-            self.total_authors += int(
-                getpipeoutput(['git shortlog -s HEAD', 'wc -l'])
-            )
-        except:
-            self.total_authors = 0
+        self.total_authors += int(
+            getpipeoutput(['git shortlog -s HEAD', 'wc -l'])
+        )
 
         # tags
         lines = getpipeoutput(['git show-ref --tags']).split('\n')
@@ -538,19 +535,19 @@ class GitDataCollector(DataCollector):
             self.authors[name]['place_by_commits'] = i + 1
 
         for name in self.authors.keys():
-            a = self.authors[name]
-            a['commits_frac'] = (
-                100 * float(a['commits'])) / self.get_total_commits()
-            date_first = datetime.fromtimestamp(a['first_commit_stamp'])
-            date_last = datetime.fromtimestamp(a['last_commit_stamp'])
+            author = self.authors[name]
+            author['commits_frac'] = (
+                100 * float(author['commits'])) / self.get_total_commits()
+            date_first = datetime.fromtimestamp(author['first_commit_stamp'])
+            date_last = datetime.fromtimestamp(author['last_commit_stamp'])
             delta = date_last - date_first
-            a['date_first'] = date_first.strftime('%Y-%m-%d')
-            a['date_last'] = date_last.strftime('%Y-%m-%d')
-            a['timedelta'] = delta
-            if 'lines_added' not in a:
-                a['lines_added'] = 0
-            if 'lines_removed' not in a:
-                a['lines_removed'] = 0
+            author['date_first'] = date_first.strftime('%Y-%m-%d')
+            author['date_last'] = date_last.strftime('%Y-%m-%d')
+            author['timedelta'] = delta
+            if 'lines_added' not in author:
+                author['lines_added'] = 0
+            if 'lines_removed' not in author:
+                author['lines_removed'] = 0
 
     def get_active_days(self):
         return self.active_days
