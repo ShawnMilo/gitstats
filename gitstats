@@ -12,7 +12,6 @@ import getopt  # todo: replace with argparse
 import glob
 import os
 import pickle
-import platform
 import re
 import shutil
 import subprocess
@@ -21,22 +20,11 @@ import time
 import zlib
 from collections import defaultdict
 import urllib
-import logging
 import tempfile
-
-logger = logging.getLogger('gitstats')
-log_path = os.path.join(tempfile.gettempdir(), 'gitstats.log')
-logger.addHandler(logging.FileHandler(log_path))
-logger.setLevel(logging.DEBUG)
 
 GNUPLOT_COMMON = \
     'set terminal png transparent size 640,240\nset size 1.0,1.0\n'
-ON_LINUX = (platform.system() == 'Linux')
 WEEKDAYS = ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
-
-exectime_internal = 0.0
-exectime_external = 0.0
-time_start = time.time()
 
 # By default, gnuplot is searched from path, but can be overridden with the
 # environment variable "GNUPLOT"
@@ -46,69 +34,51 @@ if 'GNUPLOT' in os.environ:
 
 conf = {
     'max_domains': 10,
-    'max_ext_length': 10,
     'style': 'gitstats.css',
     'max_authors': 20,
     'authors_top': 5,
-    'commit_begin': '',
-    'commit_end': 'HEAD',
     'linear_linestats': 1,
     'project_name': '',
     'exclude_extensions': 'png,gif,pdf,json,csv,jpg,sh,txt',
 }
 
+def getpipeoutput(cmds):
+    """
+    Accept a series of commands.
 
-def getpipeoutput(cmds, quiet=True):
-
-    global exectime_external
-    start = time.time()
-
-    p0 = subprocess.Popen(cmds[0], stdout=subprocess.PIPE, shell=True)
-    p = p0
+    Execute each command in order, piping the output of
+    each into the subsequent command.
+    """
+    proc = subprocess.Popen(cmds[0], stdout=subprocess.PIPE, shell=True)
+    prev = proc
     for x in cmds[1:]:
-        p = subprocess.Popen(
-            x, stdin=p0.stdout, stdout=subprocess.PIPE, shell=True)
-        p0 = p
-    output = p.communicate()[0]
-    end = time.time()
-    if not quiet:
-        if ON_LINUX and os.isatty(1):
-            print '\r',
-        print '[%.5f] >> %s' % (end - start, ' | '.join(cmds))
-    exectime_external += (end - start)
+        proc = subprocess.Popen(
+            x, stdin=prev.stdout, stdout=subprocess.PIPE, shell=True)
+        prev = proc
+    output = proc.communicate()[0]
     return output.rstrip()
 
-
-def getcommitrange(defaultrange='HEAD', end_only=False):
-    if len(conf['commit_end']) > 0:
-        if end_only or len(conf['commit_begin']) == 0:
-            return conf['commit_end']
-        return '%s..%s' % (conf['commit_begin'], conf['commit_end'])
-    return defaultrange
-
-
-def getkeyssortedbyvalues(dict):
-    return map(
-        lambda el: el[1],
-        sorted(map(lambda el: (el[1], el[0]), dict.items()))
-    )
-
+def getkeyssortedbyvalues(authors):
+    recs = [(count, author) for author, count in authors.items()]
+    return [x[1] for x in sorted(recs)]
 
 def getkeyssortedbyvaluekey(d, key):
     return map(
         lambda el: el[1], sorted(map(lambda el: (d[el][key], el), d.keys())))
 
-VERSION = 0
-
+# This should be the main function to extract data from the repository.
+def collect(path):
+    if len(conf['project_name']) == 0:
+        return os.path.basename(os.path.abspath(path))
+    return conf['project_name']
 
 def getversion():
-    global VERSION
-    if VERSION == 0:
-        VERSION = getpipeoutput(
-            ["git rev-parse --short %s" % getcommitrange('HEAD')]
-        ).split('\n')[0]
-
-    return VERSION
+    """
+    Return commit of current version of gitstats.
+    """
+    return getpipeoutput(
+        ["git rev-parse --short HEAD"]
+    ).split('\n')[0]
 
 
 def getgitversion():
@@ -118,37 +88,38 @@ def getgitversion():
 def getgnuplotversion():
     return getpipeoutput(['gnuplot --version']).split('\n')[0]
 
+class DataCollector(object):
 
-class DataCollector:
     """Manages data collection from a revision control repository."""
+
     def __init__(self):
         self.stamp_created = time.time()
         self.cache = {}
         self.total_authors = 0
-        self.activity_by_hour_of_day = {} # hour -> commits
-        self.activity_by_day_of_week = {} # day -> commits
-        self.activity_by_month_of_year = {} # month [1-12] -> commits
-        self.activity_by_hour_of_week = {} # weekday -> hour -> commits
+        self.activity_by_hour_of_day = {}  # hour -> commits
+        self.activity_by_day_of_week = {}  # day -> commits
+        self.activity_by_month_of_year = {}  # month [1-12] -> commits
+        self.activity_by_hour_of_week = {}  # weekday -> hour -> commits
         self.activity_by_hour_of_day_busiest = 0
         self.activity_by_hour_of_week_busiest = 0
-        self.activity_by_year_week = {} # yy_wNN -> commits
+        self.activity_by_year_week = {}  # yy_wNN -> commits
         self.activity_by_year_week_peak = 0
 
         self.authors = defaultdict(
-            lambda: {'lines_added' : 0, 'lines_removed' : 0, 'commits' : 0})
+            lambda: {'lines_added': 0, 'lines_removed': 0, 'commits': 0})
 
         self.total_commits = 0
         self.total_files = 0
         self.authors_by_commits = 0
 
         # domains
-        self.domains = {} # domain -> commits
+        self.domains = {}  # domain -> commits
 
         # author of the month
-        self.author_of_month = {} # month -> author -> commits
-        self.author_of_year = {} # year -> author -> commits
-        self.commits_by_month = {} # month -> commits
-        self.commits_by_year = {} # year -> commits
+        self.author_of_month = {}  # month -> author -> commits
+        self.author_of_year = {}  # year -> author -> commits
+        self.commits_by_month = {}  # month -> commits
+        self.commits_by_year = {}  # year -> commits
         self.first_commit_stamp = 0
         self.last_commit_stamp = 0
         self.last_active_day = None
@@ -160,12 +131,12 @@ class DataCollector:
         self.total_lines_removed = 0
 
         # timezone
-        self.commits_by_timezone = {} # timezone -> commits
+        self.commits_by_timezone = {}  # timezone -> commits
 
         # tags
         self.tags = {}
 
-        self.files_by_stamp = {} # stamp -> files
+        self.files_by_stamp = {}  # stamp -> files
 
         # extensions
         self.extensions = defaultdict(lambda: {'files': 0, 'lines': 0})
@@ -173,100 +144,39 @@ class DataCollector:
         # line statistics
         self.changes_by_date = defaultdict(dict)
 
-    ##
-    # This should be the main function to extract data from the repository.
-    def collect(self, dir):
-        self.dir = dir
-        if len(conf['project_name']) == 0:
-            self.projectname = os.path.basename(os.path.abspath(dir))
-        else:
-            self.projectname = conf['project_name']
 
-    ##
     # Load cacheable data
     def loadCache(self, cachefile):
         if not os.path.exists(cachefile):
             return
         print 'Loading cache...'
-        f = open(cachefile, 'rb')
+        cache = open(cachefile, 'rb')
         try:
-            self.cache = pickle.loads(zlib.decompress(f.read()))
+            self.cache = pickle.loads(zlib.decompress(cache.read()))
         except:
             # temporary hack to upgrade non-compressed caches
-            f.seek(0)
-            self.cache = pickle.load(f)
-        f.close()
-
-    ##
-    # Produce any additional statistics from the extracted data.
-    def refine(self):
-        pass
-
-    ##
-    # : get a dictionary of author
-    def getAuthorInfo(self, author):
-        return None
-
-    def getActivityByDayOfWeek(self):
-        return {}
-
-    def getActivityByHourOfDay(self):
-        return {}
-
-    # : get a dictionary of domains
-    def getDomainInfo(self, domain):
-        return None
-
-    ##
-    # Get a list of authors
-    def getAuthors(self):
-        return []
-
-    def getFirstCommitDate(self):
-        return datetime.now()
-
-    def getLastCommitDate(self):
-        return datetime.now()
+            cache.seek(0)
+            self.cache = pickle.load(cache)
+        cache.close()
 
     def getStampCreated(self):
         return self.stamp_created
 
-    def getTags(self):
-        return []
-
-    def getTotalAuthors(self):
-        return -1
-
-    def getTotalCommits(self):
-        return -1
-
-    def getTotalFiles(self):
-        return -1
-
-    def getTotalLOC(self):
-        return -1
-
-    ##
-    # Save cacheable data
-    def saveCache(self, cachefile):
+    def save_cache(self, cachefile):
         print 'Saving cache...'
         f = open(cachefile, 'wb')
-        #pickle.dump(self.cache, f)
         data = zlib.compress(pickle.dumps(self.cache))
         f.write(data)
         f.close()
 
 class GitDataCollector(DataCollector):
-    def collect(self, dir):
-        DataCollector.collect(self, dir)
 
-        try:
-            self.total_authors += int(
-                getpipeoutput(['git shortlog -s %s' % getcommitrange(),
-                'wc -l'])
-            )
-        except:
-            self.total_authors = 0
+    def collect(self, dir):
+        self.projectname = collect(dir)
+
+        self.total_authors += int(
+            getpipeoutput(['git shortlog -s HEAD', 'wc -l'])
+        )
 
         # tags
         lines = getpipeoutput(['git show-ref --tags']).split('\n')
@@ -274,11 +184,11 @@ class GitDataCollector(DataCollector):
 
             if len(line) == 0:
                 continue
-            (hash, tag) = line.split(' ')
+            (commit, tag) = line.split(' ')
 
             tag = tag.replace('refs/tags/', '')
             output = getpipeoutput(
-                ['git log "%s" --pretty=format:"%%at %%aN" -n 1' % hash])
+                ['git log "%s" --pretty=format:"%%at %%aN" -n 1' % commit])
             if len(output) > 0:
                 parts = output.split(' ')
                 stamp = 0
@@ -287,17 +197,18 @@ class GitDataCollector(DataCollector):
                 except ValueError:
                     stamp = 0
                 self.tags[tag] = {
-                    'stamp': stamp, 'hash' : hash,
-                    'date' : datetime.fromtimestamp(stamp).strftime('%Y-%m-%d'),
+                    'stamp': stamp, 'hash': commit,
+                    'date': datetime.fromtimestamp(stamp).strftime('%Y-%m-%d'),
                     'commits': 0, 'authors': {}
                 }
 
         # collect info on tags, starting from latest
-        tags_sorted_by_date_desc = map(lambda el: el[1], reversed(sorted(map(lambda el: (el[1]['date'], el[0]), self.tags.items()))))
+        tags_sorted_by_date_desc = map(lambda el: el[1], reversed(
+            sorted(map(lambda el: (el[1]['date'], el[0]), self.tags.items()))))
         prev = None
         for tag in reversed(tags_sorted_by_date_desc):
             cmd = 'git shortlog -s "%s"' % tag
-            if prev != None:
+            if prev is not None:
                 cmd += ' "^%s"' % prev
             output = getpipeoutput([cmd])
             if len(output) == 0:
@@ -312,7 +223,10 @@ class GitDataCollector(DataCollector):
 
         # Collect revision statistics
         # Outputs "<stamp> <date> <time> <timezone> <author> '<' <mail> '>'"
-        lines = getpipeoutput(['git rev-list --pretty=format:"%%at %%ai %%aN <%%aE>" %s' % getcommitrange('HEAD'), 'grep -v ^commit']).split('\n')
+        lines = getpipeoutput([
+            'git rev-list --pretty=format:"%at %ai %aN <%aE>" HEAD',
+            'grep -v ^commit'
+        ]).split('\n')
         for line in lines:
             parts = line.split(' ', 4)
             author = ''
@@ -329,7 +243,8 @@ class GitDataCollector(DataCollector):
                 domain = mail.rsplit('@', 1)[1]
             date = datetime.fromtimestamp(float(stamp))
 
-            # First and last commit stamp (may be in any order because of cherry-picking and patches)
+            # First and last commit stamp (may be in any order because of
+            # cherry-picking and patches)
             if stamp > self.last_commit_stamp:
                 self.last_commit_stamp = stamp
             if self.first_commit_stamp == 0 or stamp < self.first_commit_stamp:
@@ -338,41 +253,54 @@ class GitDataCollector(DataCollector):
             # activity
             # hour
             hour = date.hour
-            self.activity_by_hour_of_day[hour] = self.activity_by_hour_of_day.get(hour, 0) + 1
+            self.activity_by_hour_of_day[
+                hour] = self.activity_by_hour_of_day.get(hour, 0) + 1
             # most active hour?
-            if self.activity_by_hour_of_day[hour] > self.activity_by_hour_of_day_busiest:
-                self.activity_by_hour_of_day_busiest = self.activity_by_hour_of_day[hour]
+            if self.activity_by_hour_of_day[
+                    hour] > self.activity_by_hour_of_day_busiest:
+                self.activity_by_hour_of_day_busiest = \
+                    self.activity_by_hour_of_day[hour]
 
             # day of week
             day = date.weekday()
-            self.activity_by_day_of_week[day] = self.activity_by_day_of_week.get(day, 0) + 1
+            self.activity_by_day_of_week[
+                day] = self.activity_by_day_of_week.get(day, 0) + 1
 
             # domain stats
             if domain not in self.domains:
                 self.domains[domain] = {}
             # commits
-            self.domains[domain]['commits'] = self.domains[domain].get('commits', 0) + 1
+            self.domains[domain]['commits'] = self.domains[
+                domain].get('commits', 0) + 1
 
             # hour of week
             if day not in self.activity_by_hour_of_week:
                 self.activity_by_hour_of_week[day] = {}
-            self.activity_by_hour_of_week[day][hour] = self.activity_by_hour_of_week[day].get(hour, 0) + 1
+            self.activity_by_hour_of_week[day][
+                hour] = self.activity_by_hour_of_week[day].get(hour, 0) + 1
             # most active hour?
-            if self.activity_by_hour_of_week[day][hour] > self.activity_by_hour_of_week_busiest:
-                self.activity_by_hour_of_week_busiest = self.activity_by_hour_of_week[day][hour]
+            if self.activity_by_hour_of_week[day][
+                    hour] > self.activity_by_hour_of_week_busiest:
+                self.activity_by_hour_of_week_busiest = \
+                    self.activity_by_hour_of_week[day][hour]
 
             # month of year
             month = date.month
-            self.activity_by_month_of_year[month] = self.activity_by_month_of_year.get(month, 0) + 1
+            self.activity_by_month_of_year[
+                month] = self.activity_by_month_of_year.get(month, 0) + 1
 
             # yearly/weekly activity
             yyw = date.strftime('%Y-%W')
-            self.activity_by_year_week[yyw] = self.activity_by_year_week.get(yyw, 0) + 1
-            if self.activity_by_year_week_peak < self.activity_by_year_week[yyw]:
-                self.activity_by_year_week_peak = self.activity_by_year_week[yyw]
+            self.activity_by_year_week[
+                yyw] = self.activity_by_year_week.get(yyw, 0) + 1
+            if self.activity_by_year_week_peak < self.activity_by_year_week[
+                    yyw]:
+                self.activity_by_year_week_peak = self.activity_by_year_week[
+                    yyw]
 
             # author stats
-            # commits, note again that commits may be in any date order because of cherry-picking and patches
+            # commits, note again that commits may be in any date order because
+            # of cherry-picking and patches
             if 'last_commit_stamp' not in self.authors[author]:
                 self.authors[author]['last_commit_stamp'] = stamp
             if stamp > self.authors[author]['last_commit_stamp']:
@@ -385,19 +313,22 @@ class GitDataCollector(DataCollector):
             # author of the month/year
             yymm = date.strftime('%Y-%m')
             if yymm in self.author_of_month:
-                self.author_of_month[yymm][author] = self.author_of_month[yymm].get(author, 0) + 1
+                self.author_of_month[yymm][author] = self.author_of_month[
+                    yymm].get(author, 0) + 1
             else:
                 self.author_of_month[yymm] = {}
                 self.author_of_month[yymm][author] = 1
-            self.commits_by_month[yymm] = self.commits_by_month.get(yymm, 0) + 1
+            self.commits_by_month[
+                yymm] = self.commits_by_month.get(yymm, 0) + 1
 
-            yy = date.year
-            if yy in self.author_of_year:
-                self.author_of_year[yy][author] = self.author_of_year[yy].get(author, 0) + 1
+            year = date.year
+            if year in self.author_of_year:
+                self.author_of_year[year][author] = self.author_of_year[
+                    year].get(author, 0) + 1
             else:
-                self.author_of_year[yy] = {}
-                self.author_of_year[yy][author] = 1
-            self.commits_by_year[yy] = self.commits_by_year.get(yy, 0) + 1
+                self.author_of_year[year] = {}
+                self.author_of_year[year][author] = 1
+            self.commits_by_year[year] = self.commits_by_year.get(year, 0) + 1
 
             # authors: active days
             yymmdd = date.strftime('%Y-%m-%d')
@@ -414,17 +345,19 @@ class GitDataCollector(DataCollector):
                 self.active_days.add(yymmdd)
 
             # timezone
-            self.commits_by_timezone[timezone] = self.commits_by_timezone.get(timezone, 0) + 1
+            self.commits_by_timezone[
+                timezone] = self.commits_by_timezone.get(timezone, 0) + 1
 
         # TODO Optimize this, it's the worst bottleneck
         # outputs "<stamp> <files>" for each revision
         revlines = getpipeoutput([
-            'git rev-list --pretty=format:"%%at %%T" %s' % getcommitrange('HEAD'), 'grep -v ^commit'
+            'git rev-list --pretty=format:"%at %T" HEAD',
+            'grep -v ^commit'
         ]).strip().split('\n')
         lines = []
         for revline in revlines:
             time, rev = revline.split(' ')
-            linecount = self.getFilesInCommit(rev)
+            linecount = self.files_in_commit(rev)
             lines.append('%d %d' % (int(time), linecount))
 
         self.total_commits += len(lines)
@@ -440,7 +373,7 @@ class GitDataCollector(DataCollector):
 
         # extensions
         lines = getpipeoutput([
-            'git ls-tree -r -z %s' % getcommitrange('HEAD', end_only=True)
+            'git ls-tree -r -z HEAD'
         ]).split('\000')
 
         for line in lines:
@@ -449,14 +382,14 @@ class GitDataCollector(DataCollector):
 
             sha1, fullpath = line.split()[2:4]
 
-            filename = os.path.basename(fullpath) # strip directories
+            filename = os.path.basename(fullpath)  # strip directories
 
             try:
                 ext = filename.split(os.extsep)[-1]
             except IndexError as ex:
                 ext = ''
 
-            #skip extensions we aren't interested in
+            # skip extensions we aren't interested in
             if len(ext) and len(conf['exclude_extensions']):
                 if ext in conf['exclude_extensions'].split(','):
                     continue
@@ -464,34 +397,32 @@ class GitDataCollector(DataCollector):
             self.extensions[ext]['files'] += 1
             try:
                 self.extensions[ext]['lines'] += self.getLinesInBlob(sha1)
-            except:
-                print 'Warning: Could not count lines for file "%s"' % line
-
+            except ValueError as ex:
+                print "this is messed up! {0}".format(ex)
             self.total_files += 1
 
-        # line statistics
-        # outputs:
-        #  N files changed, N insertions (+), N deletions(-)
-        # <stamp> <author>
-        self.changes_by_date = {} # stamp -> { files, ins, del }
-        # computation of lines of code by date is better done
-        # on a linear history.
-        extra = ''
-        if conf['linear_linestats']:
-            extra = '--first-parent -m'
+        self.changes_by_date = {}  # stamp -> { files, ins, del }
+        extra = '--first-parent -m'
 
-        lines = getpipeoutput(['git log --numstat %s --pretty=format:"%%at %%aN" %s' % (extra, getcommitrange('HEAD'))]).split('\n')
+        lines = getpipeoutput([
+                'git log --numstat %s --pretty=format:"%%at %%aN" HEAD' %
+                (extra)
+        ]).split('\n')
+
         lines.reverse()
-        files = 0; inserted = 0; deleted = 0; total_lines = 0
+        files = 0
+        inserted = 0
+        deleted = 0
+        total_lines = 0
         author = None
         file_pattern = re.compile(r'^(\d+)\s+(\d+)\s+(.*)\s*$')
         for line in lines:
 
-            #empty lines
+            # empty lines
             if len(line.strip()) == 0:
                 continue
 
-            #binary file
+            # binary file
             if line.startswith('-'):
                 continue
 
@@ -507,7 +438,7 @@ class GitDataCollector(DataCollector):
                 except IndexError as ex:
                     ext = ''
 
-                #ignore files we don't care about
+                # ignore files we don't care about
                 if len(ext) and len(conf['exclude_extensions']):
                     if ext in conf['exclude_extensions'].split(','):
                         continue
@@ -519,7 +450,11 @@ class GitDataCollector(DataCollector):
 
             else:
                 stamp = int(line.split()[0])
-                self.changes_by_date[stamp] = { 'files': files, 'ins': inserted, 'del': deleted, 'lines': total_lines }
+                self.changes_by_date[stamp] = {
+                    'files': files,
+                    'ins': inserted,
+                    'del': deleted,
+                    'lines': total_lines}
                 files, inserted, deleted = 0, 0, 0
 
         self.total_lines = total_lines
@@ -533,16 +468,20 @@ class GitDataCollector(DataCollector):
         # (we need to walk through every commit to know who
         # committed what, not just through mainline)
 
-        lines = getpipeoutput(['git log --numstat --date-order --pretty=format:"%%at %%aN" %s' % (getcommitrange('HEAD'))]).split('\n')
+        lines = getpipeoutput([
+            'git log --numstat --date-order --pretty=format:"%at %aN" HEAD'
+        ]).split('\n')
         lines.reverse()
-        files = 0; inserted = 0; deleted = 0
+        files = 0
+        inserted = 0
+        deleted = 0
         author = None
         stamp = 0
         for line in lines:
             if len(line.strip()) == 0:
                 continue
 
-            #binary file
+            # binary file
             if line.startswith('-'):
                 continue
 
@@ -557,7 +496,7 @@ class GitDataCollector(DataCollector):
                 except IndexError as ex:
                     ext = ''
 
-                #ignore files we don't care about
+                # ignore files we don't care about
                 if len(ext) and len(conf['exclude_extensions']):
                     if ext in conf['exclude_extensions'].split(','):
                         continue
@@ -579,34 +518,42 @@ class GitDataCollector(DataCollector):
 
                 if author not in self.changes_by_date_by_author[stamp]:
                     self.changes_by_date_by_author[stamp][author] = dict()
-                self.changes_by_date_by_author[stamp][author]['lines_added'] = self.authors[author]['lines_added']
-                self.changes_by_date_by_author[stamp][author]['commits'] = self.authors[author]['commits']
+                self.changes_by_date_by_author[stamp][author][
+                    'lines_added'] = self.authors[author]['lines_added']
+                self.changes_by_date_by_author[stamp][author][
+                    'commits'] = self.authors[author]['commits']
                 files, inserted, deleted = 0, 0, 0
 
     def refine(self):
         # authors
-        # name -> {place_by_commits, commits_frac, date_first, date_last, timedelta}
-        self.authors_by_commits = getkeyssortedbyvaluekey(self.authors, 'commits')
-        self.authors_by_commits.reverse() # most first
+        # name -> {place_by_commits, commits_frac, date_first, date_last,
+        # timedelta}
+        self.authors_by_commits = getkeyssortedbyvaluekey(
+            self.authors,
+            'commits')
+        self.authors_by_commits.reverse()  # most first
         for i, name in enumerate(self.authors_by_commits):
             self.authors[name]['place_by_commits'] = i + 1
 
         for name in self.authors.keys():
-            a = self.authors[name]
-            a['commits_frac'] = (100 * float(a['commits'])) / self.getTotalCommits()
-            date_first = datetime.fromtimestamp(a['first_commit_stamp'])
-            date_last = datetime.fromtimestamp(a['last_commit_stamp'])
+            author = self.authors[name]
+            author['commits_frac'] = (
+                100 * float(author['commits'])) / self.get_total_commits()
+            date_first = datetime.fromtimestamp(author['first_commit_stamp'])
+            date_last = datetime.fromtimestamp(author['last_commit_stamp'])
             delta = date_last - date_first
-            a['date_first'] = date_first.strftime('%Y-%m-%d')
-            a['date_last'] = date_last.strftime('%Y-%m-%d')
-            a['timedelta'] = delta
-            if 'lines_added' not in a: a['lines_added'] = 0
-            if 'lines_removed' not in a: a['lines_removed'] = 0
+            author['date_first'] = date_first.strftime('%Y-%m-%d')
+            author['date_last'] = date_last.strftime('%Y-%m-%d')
+            author['timedelta'] = delta
+            if 'lines_added' not in author:
+                author['lines_added'] = 0
+            if 'lines_removed' not in author:
+                author['lines_removed'] = 0
 
-    def getActiveDays(self):
+    def get_active_days(self):
         return self.active_days
 
-    def getActivityByDayOfWeek(self):
+    def get_activity_by_dow(self):
         return self.activity_by_day_of_week
 
     def getActivityByHourOfDay(self):
@@ -615,25 +562,29 @@ class GitDataCollector(DataCollector):
     def getAuthorInfo(self, author):
         return self.authors[author]
 
-    def getAuthors(self, limit = None):
+    def getAuthors(self, limit=None):
         res = getkeyssortedbyvaluekey(self.authors, 'commits')
         res.reverse()
         return res[:limit]
 
-    def getCommitDeltaDays(self):
+    def get_commit_delta_days(self):
+        """
+        Return the number of days between commits.
+        """
         return (self.last_commit_stamp - self.first_commit_stamp) / 86400 + 1
 
-    def getDomainInfo(self, domain):
+    def get_domain_info(self, domain):
         return self.domains[domain]
 
-    def getDomains(self):
-        return self.domains.keys()
-
-    def getFilesInCommit(self, rev):
+    def files_in_commit(self, rev):
         try:
             res = self.cache['files_in_tree'][rev]
         except:
-            res = int(getpipeoutput(['git ls-tree -r --name-only "%s"' % rev, 'wc -l']).split('\n')[0])
+            res = int(
+                getpipeoutput(
+                    ['git ls-tree -r --name-only "%s"' % 
+                    rev, 'wc -l']).split('\n')[0]
+            )
             if 'files_in_tree' not in self.cache:
                 self.cache['files_in_tree'] = {}
             self.cache['files_in_tree'][rev] = res
@@ -650,7 +601,9 @@ class GitDataCollector(DataCollector):
         try:
             res = self.cache['lines_in_blob'][sha1]
         except:
-            res = int(getpipeoutput(['git cat-file blob %s' % sha1, 'wc -l']).split()[0])
+            res = int(
+                getpipeoutput(
+                    ['git cat-file blob %s' % sha1, 'wc -l']).split()[0])
             if 'lines_in_blob' not in self.cache:
                 self.cache['lines_in_blob'] = {}
             self.cache['lines_in_blob'][sha1] = res
@@ -660,129 +613,157 @@ class GitDataCollector(DataCollector):
         lines = getpipeoutput(['git show-ref --tags', 'cut -d/ -f3'])
         return lines.split('\n')
 
-    def getTagDate(self, tag):
-        return self.revToDate('tags/' + tag)
-
-    def getTotalAuthors(self):
+    def get_total_authors(self):
         return self.total_authors
 
-    def getTotalCommits(self):
+    def get_total_commits(self):
         return self.total_commits
 
-    def getTotalFiles(self):
+    def get_total_files(self):
         return self.total_files
 
-    def getTotalLOC(self):
+    def total_loc(self):
         return self.total_lines
 
-    def revToDate(self, rev):
-        stamp = int(getpipeoutput(['git log --pretty=format:%%at "%s" -n 1' % rev]))
-        return datetime.fromtimestamp(stamp).strftime('%Y-%m-%d')
+def html_header(level, text):
+    """
+    Return a string for the HTML header.
+    """
+    name = urllib.quote(text)
+    return '\n<h%d><a href="#%s" name="%s">%s</a></h%d>\n\n' % (
+        level, name, name, text, level)
 
 
-class ReportCreator:
-    """Creates the actual report based on given data."""
-    def __init__(self):
-        pass
+class HTMLReportCreator(object):
 
-    def create(self, data, path):
+    def __init__(self, data, path):
+        """
+        Initialize a new HTMLReportCreator.
+        """
         self.data = data
         self.path = path
-
-
-def html_header(level, text):
-    name = urllib.quote(text)
-    return '\n<h%d><a href="#%s" name="%s">%s</a></h%d>\n\n' % (level, name, name, text, level)
-
-
-class HTMLReportCreator(ReportCreator):
-    def create(self, data, path):
-        ReportCreator.create(self, data, path)
         self.title = data.projectname
+        self.authors_to_plot = None
 
-        # copy static files. Looks in the binary directory, ../share/gitstats and /usr/share/gitstats
+    def create(self):
+        """
+        Make the HTML files.
+        """
+
+        data = self.data
+        path = self.path
+
+        # copy static files. Looks in the binary directory, ../share/gitstats
+        # and /usr/share/gitstats
         binarypath = os.path.dirname(os.path.abspath(__file__))
         secondarypath = os.path.join(binarypath, '..', 'share', 'gitstats')
         basedirs = [binarypath, secondarypath, '/usr/share/gitstats']
-        for file in ('gitstats.css', 'sortable.js', 'arrow-up.gif', 'arrow-down.gif', 'arrow-none.gif'):
+        for filename in ('gitstats.css', 'sortable.js',
+                     'arrow-up.gif', 'arrow-down.gif', 'arrow-none.gif'):
             for base in basedirs:
-                src = os.path.join(base, file)
+                src = os.path.join(base, filename)
                 if os.path.exists(src):
-                    shutil.copyfile(src, os.path.join(path, file))
+                    shutil.copyfile(src, os.path.join(path, filename))
                     break
             else:
-                print 'Warning: "%s" not found, so not copied (searched: %s)' % (file, basedirs)
+                msg = 'Warning: "{0}" not found, so not copied (searched: {1})'
+                print msg.format(filename, basedirs)
 
-        f = open(os.path.join(path, "index.html"), 'w')
-        format = '%Y-%m-%d %H:%M:%S'
-        self.printHeader(f)
+        outfile = open(os.path.join(path, "index.html"), 'w')
+        date_format = '%Y-%m-%d %H:%M:%S'
+        self.print_header(outfile)
 
         out = []
-
         out.append('<h1>GitStats - %s</h1>' % data.projectname)
-
-        out.append(self.printNav())
-
+        out.append(print_nav())
         out.append('<dl class="dl-horizontal">')
         out.append('<dt>Project name</dt><dd>%s</dd>' % (data.projectname))
-        out.append('<dt>Generated</dt><dd>%s (in %d seconds)</dd>' % (datetime.now().strftime(format), time.time() - data.getStampCreated()))
-        out.append('<dt>Generator</dt><dd><a href="http://gitstats.sourceforge.net/">GitStats</a> (version %s), %s, %s</dd>' % (getversion(), getgitversion(), getgnuplotversion()))
-        out.append('<dt>Report Period</dt><dd>%s to %s</dd>' % (data.getFirstCommitDate().strftime(format), data.getLastCommitDate().strftime(format)))
-        out.append('<dt>Age</dt><dd>%d days, %d active days (%3.2f%%)</dd>' % (data.getCommitDeltaDays(), len(data.getActiveDays()), (100.0 * len(data.getActiveDays()) / data.getCommitDeltaDays())))
-        out.append('<dt>Total Files</dt><dd>%s</dd>' % data.getTotalFiles())
-        out.append('<dt>Total Lines of Code</dt><dd>%s (%d added, %d removed)</dd>' % (data.getTotalLOC(), data.total_lines_added, data.total_lines_removed))
-        out.append('<dt>Total Commits</dt><dd>%s (average %.1f commits per active day, %.1f per all days)</dd>' % (data.getTotalCommits(), float(data.getTotalCommits()) / len(data.getActiveDays()), float(data.getTotalCommits()) / data.getCommitDeltaDays()))
-        out.append('<dt>Authors</dt><dd>%s (average %.1f commits per author)</dd>' % (data.getTotalAuthors(), (1.0 * data.getTotalCommits()) / data.getTotalAuthors()))
+        out.append(
+            '<dt>Generated</dt><dd>%s (in %d seconds)</dd>' %
+            (datetime.now().strftime(date_format),
+             time.time() -
+             data.getStampCreated()))
+        out.append(
+            '<dt>Generator</dt><dd><a href="http://gitstats.sourceforge.net/">GitStats</a> (version %s), %s, %s</dd>' %
+            (getversion(), getgitversion(), getgnuplotversion()))
+        out.append(
+            '<dt>Report Period</dt><dd>%s to %s</dd>' %
+            (data.getFirstCommitDate().strftime(date_format),
+             data.getLastCommitDate().strftime(date_format)))
+        out.append('<dt>Age</dt><dd>%d days, %d active days (%3.2f%%)</dd>' %
+                   (data.get_commit_delta_days(), len(data.get_active_days()), (100.0 *
+                                                                           len(data.get_active_days()) /
+                                                                           data.get_commit_delta_days())))
+        out.append('<dt>Total Files</dt><dd>%s</dd>' % data.get_total_files())
+        out.append(
+            '<dt>Total Lines of Code</dt><dd>%s (%d added, %d removed)</dd>' %
+            (data.total_loc(),
+             data.total_lines_added,
+             data.total_lines_removed))
+        out.append(
+            '<dt>Total Commits</dt><dd>%s (average %.1f commits per active day, %.1f per all days)</dd>' %
+            (data.get_total_commits(), float(
+                data.get_total_commits()) / len(
+                data.get_active_days()), float(
+                data.get_total_commits()) / data.get_commit_delta_days()))
+        out.append(
+            '<dt>Authors</dt><dd>%s (average %.1f commits per author)</dd>' %
+            (data.get_total_authors(), (1.0 * data.get_total_commits()) / data.get_total_authors()))
         out.append('</dl>')
 
-
-        f.write('\n'.join(out))
-        self.printFooter(f)
-        f.close()
+        out.append('</body>\n</html>')
+        outfile.write('\n'.join(out))
+        outfile.close()
 
         ###
         # Activity
-        f = open(path + '/activity.html', 'w')
+        outfile = open(path + '/activity.html', 'w')
         out = []
-        self.printHeader(f)
+        self.print_header(outfile)
         out.append('<h1>Activity</h1>')
-        out.append(self.printNav())
-
-        #out.append('<h2>Last 30 days</h2>')
-
-        #out.append('<h2>Last 12 months</h2>')
+        out.append(print_nav())
 
         # Weekly activity
-        WEEKS = 32
+        num_weeks = 32
         out.append(html_header(2, 'Weekly activity'))
-        out.append('<p>Last %d weeks</p>' % WEEKS)
+        out.append('<p>Last %d weeks</p>' % num_weeks)
 
         # generate weeks to show (previous N weeks from now)
         now = datetime.now()
-        deltaweek = timedelta(days = 7)
+        deltaweek = timedelta(days=7)
         weeks = []
         stampcur = now
-        for i in range(0, WEEKS):
+        for i in range(0, num_weeks):
             weeks.insert(0, stampcur.strftime('%Y-%W'))
             stampcur -= deltaweek
 
         # top row: commits & bar
         out.append('<table class="table tight-table"><tr>')
-        for i in range(0, WEEKS):
+        for i in range(0, num_weeks):
             commits = 0
             if weeks[i] in data.activity_by_year_week:
                 commits = data.activity_by_year_week[weeks[i]]
 
             percentage = 0
             if weeks[i] in data.activity_by_year_week:
-                percentage = float(data.activity_by_year_week[weeks[i]]) / data.activity_by_year_week_peak
+                percentage = float(
+                    data.activity_by_year_week[
+                        weeks[i]]) / data.activity_by_year_week_peak
             height = max(1, int(200 * percentage))
-            out.append('<td style="text-align: center; vertical-align: bottom">{0}<div style="display: block; background-color:  hsl(206, 90%, 50%); width: 20px; height: {1}px"></div></td>'.format(commits, height))
+            out.append(
+                '<td style="text-align: center; vertical-align: bottom">'
+                '{0}<div style="display: block; '
+                'background-color:  hsl(206, 90%, 50%);'
+                'width: 20px; height: {1}px"></div></td>'.format(
+                    commits, height
+                )
+            )
+
 
         # bottom row: year/week
         out.append('</tr><tr>')
-        for i in range(0, WEEKS):
-            out.append('<td>%s</td>' % (WEEKS - i))
+        for i in range(0, num_weeks):
+            out.append('<td>%s</td>' % (num_weeks - i))
         out.append('</tr></table>')
 
         # Hour of Day
@@ -792,64 +773,77 @@ class HTMLReportCreator(ReportCreator):
         for i in range(0, 24):
             out.append('<th>%d</th>' % i)
         out.append('</tr>\n<tr><th>Commits</th>')
-        fp = open(path + '/hour_of_day.dat', 'w')
+        filehandle = open(path + '/hour_of_day.dat', 'w')
         out2 = []
         for i in range(0, 24):
             if i in hour_of_day:
-                r = 100 - int((float(hour_of_day[i]) / data.activity_by_hour_of_day_busiest) * 50)
-                out.append('<td style="background-color: hsl(206, 90%, {0}%)">{1}</td>'.format(r, hour_of_day[i]))
+                lightness = 100 - int(
+                    (float(hour_of_day[i]) / 
+                        data.activity_by_hour_of_day_busiest) * 50
+                )
+                out.append(
+                    '<td style="background-color: hsl(206, 90%, {0}%)">{1}</td>'.format(
+                        lightness, hour_of_day[i]
+                    )
+                )
                 out2.append('%d %d\n' % (i, hour_of_day[i]))
             else:
                 out.append('<td>0</td>')
                 out2.append('%d 0\n' % i)
-        fp.write('\n'.join(out2))
+        filehandle.write('\n'.join(out2))
         del out2
-        fp.close()
+        filehandle.close()
         out.append('</tr>\n<tr><th>%</th>')
-        totalcommits = data.getTotalCommits()
+        totalcommits = data.get_total_commits()
         for i in range(0, 24):
             if i in hour_of_day:
-                r = 100 - int((float(hour_of_day[i]) / data.activity_by_hour_of_day_busiest) * 50)
-                out.append('<td style="background-color: hsl(206, 90%, {0}%)">{1:.1f}</td>'.format(r, (100.0 * hour_of_day[i]) / totalcommits))
+                lightness = 100 - \
+                    int((float(hour_of_day[i]) / 
+                        data.activity_by_hour_of_day_busiest) * 50)
+                out.append(
+                    '<td style="background-color: hsl(206, 90%, {0}%)">{1:.1f}</td>'.format(
+                        lightness, (100.0 * hour_of_day[i]) / totalcommits))
             else:
                 out.append('<td>0</td>')
         out.append('</tr></table>')
         out.append('<img src="hour_of_day.png" alt="Hour of Day" />')
-        fg = open(path + '/hour_of_day.dat', 'w')
+        hours_file = open(path + '/hour_of_day.dat', 'w')
         out2 = []
         for i in range(0, 24):
             if i in hour_of_day:
                 out2.append('%d %d\n' % (i + 1, hour_of_day[i]))
             else:
                 out2.append('%d 0\n' % (i + 1))
-        fg.write('\n'.join(out2))
+        hours_file.write('\n'.join(out2))
         del out2
-        fg.close()
+        hours_file.close()
 
         # Day of Week
         out.append(html_header(2, 'Day of Week'))
-        day_of_week = data.getActivityByDayOfWeek()
+        day_of_week = data.get_activity_by_dow()
         out.append('<table class="table vertical-table">')
         out.append('<tr><th>Day</th><th>Total (%)</th></tr>')
-        fp = open(path + '/day_of_week.dat', 'w')
+        dow_file = open(path + '/day_of_week.dat', 'w')
         out2 = []
-        for d in range(0, 7):
+        for i in range(0, 7):
             commits = 0
-            if d in day_of_week:
-                commits = day_of_week[d]
-            out2.append('%d %s %d\n' % (d + 1, WEEKDAYS[d], commits))
+            if i in day_of_week:
+                commits = day_of_week[i]
+            out2.append('%d %s %d\n' % (i + 1, WEEKDAYS[i], commits))
             out.append('<tr>')
-            out.append('<th>%s</th>' % (WEEKDAYS[d]))
-            if d in day_of_week:
-                out.append('<td>%d (%.2f%%)</td>' % (day_of_week[d], (100.0 * day_of_week[d]) / totalcommits))
+            out.append('<th>%s</th>' % (WEEKDAYS[i]))
+            if i in day_of_week:
+                out.append(
+                    '<td>%d (%.2f%%)</td>' %
+                    (day_of_week[i], (100.0 * day_of_week[i]) / totalcommits))
             else:
                 out.append('<td>0</td>')
             out.append('</tr>')
         out.append('</table>')
         out.append('<img src="day_of_week.png" alt="Day of Week" />')
-        fp.write('\n'.join(out2))
+        dow_file.write('\n'.join(out2))
         del out2
-        fp.close()
+        dow_file.close()
 
         # Hour of Week
         out.append(html_header(2, 'Hour of Week'))
@@ -869,8 +863,10 @@ class HTMLReportCreator(ReportCreator):
                     commits = 0
                 if commits != 0:
                     out.append('<td')
-                    r = 100 - int((float(commits) / data.activity_by_hour_of_week_busiest) * 50)
-                    out.append(' style="background-color: hsl(206, 90%%, %d%%)"' % r)
+                    lightness = 100 - \
+                        int((float(commits) / 
+                            data.activity_by_hour_of_week_busiest) * 50)
+                    out.append(' style="background-color: hsl(206, 90%%, %d%%)"' % lightness)
                     out.append('>%d</td>' % commits)
                 else:
                     out.append('<td></td>')
@@ -880,107 +876,155 @@ class HTMLReportCreator(ReportCreator):
 
         # Month of Year
         out.append(html_header(2, 'Month of Year'))
-        out.append('<div class="vtable"><table class="table">')
+        out.append('<table class="table vertical-table">')
         out.append('<tr><th>Month</th><th>Commits (%)</th></tr>')
-        fp = open (path + '/month_of_year.dat', 'w')
+        moy_file = open(path + '/month_of_year.dat', 'w')
         out2 = []
-        for mm in range(1, 13):
+        for i in range(1, 13):
             commits = 0
-            if mm in data.activity_by_month_of_year:
-                commits = data.activity_by_month_of_year[mm]
-            out.append('<tr><td>%d</td><td>%d (%.2f %%)</td></tr>' % (mm, commits, (100.0 * commits) / data.getTotalCommits()))
-            out2.append('%d %d\n' % (mm, commits))
-        fp.write('\n'.join(out2))
+            if i in data.activity_by_month_of_year:
+                commits = data.activity_by_month_of_year[i]
+            out.append(
+                '<tr><td>%d</td><td>%d (%.2f %%)</td></tr>' %
+                (i, commits, (100.0 * commits) / data.get_total_commits()))
+            out2.append('%d %d\n' % (i, commits))
+        moy_file.write('\n'.join(out2))
         del out2
-        fp.close()
-        out.append('</table></div>')
+        moy_file.close()
+        out.append('</table>')
         out.append('<img src="month_of_year.png" alt="Month of Year" />')
 
         # Commits by year/month
         out.append(html_header(2, 'Commits by year/month'))
-        out.append('<table class="table vertical-table"><tr><th>Month</th><th>Commits</th></tr>')
+        out.append(
+            (
+                '<table class="table vertical-table"><tr><th>Month</th>'
+                '<th>Commits</th></tr>'
+            )
+        )
         for yymm in reversed(sorted(data.commits_by_month.keys())):
-            out.append('<tr><td>%s</td><td>%d</td></tr>' % (yymm, data.commits_by_month[yymm]))
+            out.append(
+                '<tr><td>%s</td><td>%d</td></tr>' %
+                (yymm, data.commits_by_month[yymm]))
         out.append('</table>')
-        out.append('<img src="commits_by_year_month.png" alt="Commits by year/month" />')
-        fg = open(path + '/commits_by_year_month.dat', 'w')
+        out.append(
+            '<img src="commits_by_year_month.png" alt="Commits by year/month" />')
+        cby_file = open(path + '/commits_by_year_month.dat', 'w')
         out2 = []
         for yymm in sorted(data.commits_by_month.keys()):
             out2.append('%s %s\n' % (yymm, data.commits_by_month[yymm]))
-        fg.write('\n'.join(out2))
+        cby_file.write('\n'.join(out2))
         del out2
-        fg.close()
+        cby_file.close()
 
         # Commits by year
         out.append(html_header(2, 'Commits by Year'))
-        out.append('<table class="table vertical-table"><tr><th>Year</th><th>Commits (% of all)</th></tr>')
-        for yy in reversed(sorted(data.commits_by_year.keys())):
-            out.append('<tr><td>%s</td><td>%d (%.2f%%)</td></tr>' % (yy, data.commits_by_year[yy], (100.0 * data.commits_by_year[yy]) / data.getTotalCommits()))
+
+        out.append(
+            '<table class="table vertical-table"><tr><th>Year</th><th>Commits (% of all)</th></tr>')
+        for year in reversed(sorted(data.commits_by_year.keys())):
+            out.append(
+                '<tr><td>%s</td><td>%d (%.2f%%)</td></tr>' %
+                (year,
+                 data.commits_by_year[year],
+                 (100.0 *
+                  data.commits_by_year[year]) /
+                    data.get_total_commits()))
         out.append('</table>')
         out.append('<img src="commits_by_year.png" alt="Commits by Year" />')
-        fg = open(path + '/commits_by_year.dat', 'w')
+        cby_out = open(path + '/commits_by_year.dat', 'w')
         out2 = []
-        for yy in sorted(data.commits_by_year.keys()):
-            out2.append('%d %d\n' % (yy, data.commits_by_year[yy]))
-        fg.write('\n'.join(out2))
+        for year in sorted(data.commits_by_year.keys()):
+            out2.append('%d %d\n' % (year, data.commits_by_year[year]))
+        cby_out.write('\n'.join(out2))
         del out2
-        fg.close()
+        cby_out.close()
 
         # Commits by timezone
         out.append(html_header(2, 'Commits by Timezone'))
         out.append('<table class="table"><tr>')
         out.append('<th>Timezone</th><th>Commits</th>')
         max_commits_on_tz = max(data.commits_by_timezone.values())
-        for i in sorted(data.commits_by_timezone.keys(), key = lambda n : int(n)):
+        for i in sorted(data.commits_by_timezone.keys(), key=lambda n: int(n)):
             commits = data.commits_by_timezone[i]
-            r = 100 - int((float(commits) / max_commits_on_tz) * 50)
-            out.append('<tr><th>%s</th><td style="background-color: hsl(206, 90%%, %d%%)">%d</td></tr>' % (i, r, commits))
-        out.append('</tr></table>')
-
-        f.write('\n'.join(out))
-        self.printFooter(f)
-        f.close()
+            lightness = 100 - int((float(commits) / max_commits_on_tz) * 50)
+            out.append(
+                '<tr><th>%s</th><td '
+                'style="background-color: hsl(206, 90%%, %d%%)"'
+                '>%d</td></tr>' % (i, lightness, commits))
+        out.append('</body></html>')
+        outfile.write('\n'.join(out))
+        outfile.close()
 
         ###
         # Authors
         out = []
-        f = open(path + '/authors.html', 'w')
-        self.printHeader(f)
+        outfile = open(path + '/authors.html', 'w')
+        self.print_header(outfile)
 
         out.append('<h1>Authors</h1>')
-        out.append(self.printNav())
+        out.append(print_nav())
 
         # Authors :: List of authors
         out.append(html_header(2, 'List of Authors'))
 
         out.append('<table class="table authors sortable" id="authors">')
-        out.append('<tr><th>Author</th><th>Commits (%)</th><th>+ lines</th><th>- lines</th><th>First commit</th><th>Last commit</th><th class="unsortable">Age</th><th>Active days</th><th># by commits</th></tr>')
+        out.append((
+            '<tr><th>Author</th><th>Commits (%)</th><th>+ lines</th><th>- '
+            'lines</th><th>First commit</th><th>Last commit</th><th '
+            'class="unsortable">Age</th><th>Active days</th><th># '
+            'by commits</th></tr>'
+        ))
+
         for author in data.getAuthors(conf['max_authors']):
             info = data.getAuthorInfo(author)
-            out.append('<tr><td>%s</td><td>%d (%.2f%%)</td><td>%d</td><td>%d</td><td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%d</td></tr>' % (author, info['commits'], info['commits_frac'], info['lines_added'], info['lines_removed'], info['date_first'], info['date_last'], info['timedelta'], len(info['active_days']), info['place_by_commits']))
+            out.append((
+                '<tr><td>%s</td><td>%d (%.2f%%)</td><td>%d</td><td>%d</td>'
+                '<td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%d</td></tr>'
+            ) % (
+                author,
+                info['commits'],
+                info['commits_frac'],
+                info['lines_added'],
+                info['lines_removed'],
+                info['date_first'],
+                info['date_last'],
+                info['timedelta'],
+                len(info['active_days']),
+                info['place_by_commits'],
+            ))
         out.append('</table>')
 
         allauthors = data.getAuthors()
         if len(allauthors) > conf['max_authors']:
             rest = allauthors[conf['max_authors']:]
-            out.append('<p class="moreauthors">These didn\'t make it to the top: %s</p>' % ', '.join(rest))
+            out.append((
+                "<p class='moreauthors'>These didn't make it to "
+                "the top: %s</p>"
+            ) % ', '.join(rest))
 
         out.append(html_header(2, 'Cumulated Added Lines of Code per Author'))
-        out.append('<img src="lines_of_code_by_author.png" alt="Lines of code per Author" />')
+        out.append(
+            '<img src="lines_of_code_by_author.png" alt="Lines of code per Author" />')
         if len(allauthors) > conf['max_authors']:
-            out.append('<p class="moreauthors">Only top %d authors shown</p>' % conf['max_authors'])
+            out.append(
+                '<p class="moreauthors">Only top %d authors shown</p>' %
+                conf['max_authors'])
 
         out.append(html_header(2, 'Commits per Author'))
-        out.append('<img src="commits_by_author.png" alt="Commits per Author" />')
+        out.append(
+            '<img src="commits_by_author.png" alt="Commits per Author" />')
         if len(allauthors) > conf['max_authors']:
-            out.append('<p class="moreauthors">Only top %d authors shown</p>' % conf['max_authors'])
+            out.append(
+                '<p class="moreauthors">Only top %d authors shown</p>' %
+                conf['max_authors'])
 
         fgl = open(path + '/lines_of_code_by_author.dat', 'w')
         out_fgl = []
         fgc = open(path + '/commits_by_author.dat', 'w')
         out_fgc = []
 
-        lines_by_authors = {} # cumulated added lines by
+        lines_by_authors = {}  # cumulated added lines by
         # author. to save memory,
         # changes_by_date_by_author[stamp][author] is defined
         # only at points where author commits.
@@ -989,7 +1033,7 @@ class HTMLReportCreator(ReportCreator):
 
         # Don't rely on getAuthors to give the same order each
         # time. Be robust and keep the list in a variable.
-        commits_by_authors = {} # cumulated added lines by
+        commits_by_authors = {}  # cumulated added lines by
 
         self.authors_to_plot = data.getAuthors(conf['max_authors'])
         for author in self.authors_to_plot:
@@ -1000,8 +1044,10 @@ class HTMLReportCreator(ReportCreator):
             out_fgc.append('%d' % stamp)
             for author in self.authors_to_plot:
                 if author in data.changes_by_date_by_author[stamp].keys():
-                    lines_by_authors[author] = data.changes_by_date_by_author[stamp][author]['lines_added']
-                    commits_by_authors[author] = data.changes_by_date_by_author[stamp][author]['commits']
+                    lines_by_authors[author] = data.changes_by_date_by_author[
+                        stamp][author]['lines_added']
+                    commits_by_authors[author] = data.changes_by_date_by_author[
+                        stamp][author]['commits']
                 out_fgl.append(' %d' % lines_by_authors[author])
                 out_fgc.append(' %d' % commits_by_authors[author])
             out_fgl.append('\n')
@@ -1017,26 +1063,50 @@ class HTMLReportCreator(ReportCreator):
         # Authors :: Author of Month
         out.append(html_header(2, 'Author of Month'))
         out.append('<table class="table sortable" id="aom">')
-        out.append('<tr><th>Month</th><th>Author</th><th>Commits (%%)</th><th class="unsortable">Next top %d</th><th>Number of authors</th></tr>' % conf['authors_top'])
+        out.append(
+            '<tr><th>Month</th><th>Author</th><th>Commits (%%)</th><th class="unsortable">Next top %d</th><th>Number of authors</th></tr>' %
+            conf['authors_top'])
         for yymm in reversed(sorted(data.author_of_month.keys())):
             authordict = data.author_of_month[yymm]
             authors = getkeyssortedbyvalues(authordict)
             authors.reverse()
             commits = data.author_of_month[yymm][authors[0]]
-            next = ', '.join(authors[1:conf['authors_top']+1])
-            out.append('<tr><td>%s</td><td>%s</td><td>%d (%.2f%% of %d)</td><td>%s</td><td>%d</td></tr>' % (yymm, authors[0], commits, (100.0 * commits) / data.commits_by_month[yymm], data.commits_by_month[yymm], next, len(authors)))
+            next_author = ', '.join(authors[1:conf['authors_top'] + 1])
+            out.append(
+                '<tr><td>%s</td><td>%s</td><td>%d (%.2f%% of %d)</td><td>%s</td><td>%d</td></tr>' %
+                (yymm,
+                 authors[0],
+                    commits,
+                    (100.0 *
+                     commits) /
+                    data.commits_by_month[yymm],
+                    data.commits_by_month[yymm],
+                    next_author,
+                    len(authors)))
 
         out.append('</table>')
 
         out.append(html_header(2, 'Author of Year'))
-        out.append('<table class="table sortable" id="aoy"><tr><th>Year</th><th>Author</th><th>Commits (%%)</th><th class="unsortable">Next top %d</th><th>Number of authors</th></tr>' % conf['authors_top'])
-        for yy in reversed(sorted(data.author_of_year.keys())):
-            authordict = data.author_of_year[yy]
+        out.append(
+            '<table class="table sortable" id="aoy"><tr><th>Year</th><th>Author</th><th>Commits (%%)</th><th class="unsortable">Next top %d</th><th>Number of authors</th></tr>' %
+            conf['authors_top'])
+        for year in reversed(sorted(data.author_of_year.keys())):
+            authordict = data.author_of_year[year]
             authors = getkeyssortedbyvalues(authordict)
             authors.reverse()
-            commits = data.author_of_year[yy][authors[0]]
-            next = ', '.join(authors[1:conf['authors_top']+1])
-            out.append('<tr><td>%s</td><td>%s</td><td>%d (%.2f%% of %d)</td><td>%s</td><td>%d</td></tr>' % (yy, authors[0], commits, (100.0 * commits) / data.commits_by_year[yy], data.commits_by_year[yy], next, len(authors)))
+            commits = data.author_of_year[year][authors[0]]
+            next_author = ', '.join(authors[1:conf['authors_top'] + 1])
+            out.append(
+                '<tr><td>%s</td><td>%s</td><td>%d (%.2f%% of %d)</td><td>%s</td><td>%d</td></tr>' %
+                (year,
+                 authors[0],
+                    commits,
+                    (100.0 *
+                     commits) /
+                    data.commits_by_year[year],
+                    data.commits_by_year[year],
+                    next_author,
+                    len(authors)))
         out.append('</table>')
 
         # Domains
@@ -1045,45 +1115,51 @@ class HTMLReportCreator(ReportCreator):
         domains_by_commits.reverse()  # most first
         out.append('<table class="table vertical-table">')
         out.append('<tr><th>Domains</th><th>Total (%)</th></tr>')
-        fp = open(path + '/domains.dat', 'w')
+        domain_file = open(path + '/domains.dat', 'w')
         out2 = []
-        n = 0
+        i = 0
         for domain in domains_by_commits:
-            if n == conf['max_domains']:
+            if i == conf['max_domains']:
                 break
             commits = 0
-            n += 1
-            info = data.getDomainInfo(domain)
-            out2.append('%s %d %d\n' % (domain, n , info['commits']))
-            out.append('<tr><th>%s</th><td>%d (%.2f%%)</td></tr>' % (domain, info['commits'], (100.0 * info['commits'] / totalcommits)))
+
+            i += 1
+            info = data.get_domain_info(domain)
+            out2.append('%s %d %d\n' % (domain, i, info['commits']))
+            out.append(
+                '<tr><th>%s</th><td>%d (%.2f%%)</td></tr>' %
+                (domain, info['commits'], (100.0 * info['commits'] / totalcommits)))
+
         out.append('</table>')
         out.append('<img src="domains.png" alt="Commits by Domains" />')
-        fp.write('\n'.join(out2))
+        domain_file.write('\n'.join(out2))
         del out2
-        fp.close()
+        domain_file.close()
 
-        
-        f.write('\n'.join(out))
-        self.printFooter(f)
-        f.close()
+        out.append('</body></html>')
+
+        outfile.write('\n'.join(out))
+        outfile.close()
 
         ###
         # Files
         out = []
-        f = open(path + '/files.html', 'w')
-        self.printHeader(f)
+        outfile = open(path + '/files.html', 'w')
+        self.print_header(outfile)
         out.append('<h1>Files</h1>')
-        out.append(self.printNav())
+        out.append(print_nav())
 
         out.append('<dl>\n')
-        out.append('<dt>Total files</dt><dd>%d</dd>' % data.getTotalFiles())
-        out.append('<dt>Total lines</dt><dd>%d</dd>' % data.getTotalLOC())
+        out.append('<dt>Total files</dt><dd>%d</dd>' % data.get_total_files())
+        out.append('<dt>Total lines</dt><dd>%d</dd>' % data.total_loc())
 
         try:
-            average_size = (100.0 * data.getTotalLOC()) / data.getTotalFiles()
-        except ZeroDivisionError as ex:
+            average_size = (100.0 * data.total_loc()) / data.get_total_files()
+        except ZeroDivisionError:
             average_size = 0.0
-        out.append('<dt>Average file size</dt><dd>%.2f bytes</dd>' % (average_size))
+        out.append(
+            '<dt>Average file size</dt><dd>%.2f bytes</dd>' %
+            (average_size))
         out.append('</dl>\n')
 
         # Files :: File count by date
@@ -1092,104 +1168,128 @@ class HTMLReportCreator(ReportCreator):
         # use set to get rid of duplicate/unnecessary entries
         files_by_date = set()
         for stamp in sorted(data.files_by_stamp.keys()):
-            files_by_date.add('%s %d' % (datetime.fromtimestamp(stamp).strftime('%Y-%m-%d'), data.files_by_stamp[stamp]))
+            files_by_date.add(
+                '%s %d' %
+                (datetime.fromtimestamp(stamp).strftime('%Y-%m-%d'),
+                 data.files_by_stamp[stamp]))
 
-        fg = open(path + '/files_by_date.dat', 'w')
+        fbd_file = open(path + '/files_by_date.dat', 'w')
         out2 = []
         for line in sorted(list(files_by_date)):
             out2.append(line)
-        fg.write('\n'.join(out2))
+        fbd_file.write('\n'.join(out2))
         del out2
-        fg.close()
+        fbd_file.close()
 
         out.append('<img src="files_by_date.png" alt="Files by Date" />')
 
         # Files :: Extensions
         out.append(html_header(2, 'Extensions'))
-        out.append('<table class="table sortable" id="ext"><tr><th>Extension</th><th>Files (%)</th><th>Lines (%)</th><th>Lines/file</th></tr>')
+        out.append(
+            '<table class="table sortable" id="ext"><tr><th>Extension</th><th>Files (%)</th><th>Lines (%)</th><th>Lines/file</th></tr>')
         for ext in sorted(data.extensions.keys()):
             files = data.extensions[ext]['files']
             lines = data.extensions[ext]['lines']
 
             try:
-                ext_pct = (100.0 * files) / data.getTotalFiles()
-            except ZeroDivisionError as ex:
+                ext_pct = (100.0 * files) / data.get_total_files()
+            except ZeroDivisionError:
                 ext_pct = 0.0
 
-            out.append('<tr><td>%s</td><td>%d (%.2f%%)</td><td>%d (%.2f%%)</td><td>%d</td></tr>' % (ext, files, ext_pct, lines, (100.0 * lines) / data.getTotalLOC(), lines / files))
+            out.append(
+                '<tr><td>%s</td><td>%d (%.2f%%)</td><td>%d (%.2f%%)</td><td>%d</td></tr>' %
+                (ext, files, ext_pct, lines, (100.0 * lines) / data.total_loc(), lines / files))
         out.append('</table>')
 
-        f.write('\n'.join(out))
-        self.printFooter(f)
-        f.close()
+        out.append('</body></html>')
+        outfile.write('\n'.join(out))
+        outfile.close()
 
         ###
         # Lines
-        f = open(path + '/lines.html', 'w')
+        outfile = open(path + '/lines.html', 'w')
         out = []
-        self.printHeader(f)
+        self.print_header(outfile)
         out.append('<h1>Lines</h1>')
-        out.append(self.printNav())
+        out.append(print_nav())
 
         out.append('<dl>\n')
-        out.append('<dt>Total lines</dt><dd>%d</dd>' % data.getTotalLOC())
+        out.append('<dt>Total lines</dt><dd>%d</dd>' % data.total_loc())
         out.append('</dl>\n')
 
         out.append(html_header(2, 'Lines of Code'))
         out.append('<img src="lines_of_code.png" />')
 
-        fg = open(path + '/lines_of_code.dat', 'w')
+        loc_file = open(path + '/lines_of_code.dat', 'w')
         out2 = []
         for stamp in sorted(data.changes_by_date.keys()):
-            out2.append('%d %d' % (stamp, data.changes_by_date[stamp]['lines']))
-        fg.write('\n'.join(out2))
+            out2.append(
+                '%d %d' %
+                (stamp, data.changes_by_date[stamp]['lines']))
+        loc_file.write('\n'.join(out2))
         del out2
-        fg.close()
+        loc_file.close()
 
-        f.write('\n'.join(out))
-        self.printFooter(f)
-        f.close()
+        out.append('</body></html>')
+        outfile.write('\n'.join(out))
+        outfile.close()
 
         ###
         # tags.html
         out = []
-        f = open(path + '/tags.html', 'w')
-        self.printHeader(f)
+        outfile = open(path + '/tags.html', 'w')
+        self.print_header(outfile)
         out.append('<h1>Tags</h1>')
-        out.append(self.printNav())
+        out.append(print_nav())
 
         out.append('<dl>')
         out.append('<dt>Total tags</dt><dd>%d</dd>' % len(data.tags))
         if len(data.tags) > 0:
-            out.append('<dt>Average commits per tag</dt><dd>%.2f</dd>' % (1.0 * data.getTotalCommits() / len(data.tags)))
+            out.append('<dt>Average commits per tag</dt><dd>%.2f</dd>' %
+                       (1.0 * data.get_total_commits() / len(data.tags)))
         out.append('</dl>')
 
         out.append('<table class="table tags">')
-        out.append('<tr><th>Name</th><th>Date</th><th>Commits</th><th>Authors</th></tr>')
+        out.append(
+            '<tr><th>Name</th><th>Date</th><th>Commits</th><th>Authors</th></tr>'
+        )
+
         # sort the tags by date desc
-        tags_sorted_by_date_desc = map(lambda el: el[1], reversed(sorted(map(lambda el: (el[1]['date'], el[0]), data.tags.items()))))
+        tags_sorted_by_date_desc = map(lambda el: el[1], reversed(
+            sorted(map(lambda el: (el[1]['date'], el[0]), data.tags.items()))))
         for tag in tags_sorted_by_date_desc:
             authorinfo = []
-            self.authors_by_commits = getkeyssortedbyvalues(data.tags[tag]['authors'])
+            self.authors_by_commits = getkeyssortedbyvalues(
+                data.tags[tag]['authors'])
             for i in reversed(self.authors_by_commits):
-                authorinfo.append('%s (%d)' % (i, data.tags[tag]['authors'][i]))
-            out.append('<tr><td>%s</td><td>%s</td><td>%d</td><td>%s</td></tr>' % (tag, data.tags[tag]['date'], data.tags[tag]['commits'], ', '.join(authorinfo)))
+                authorinfo.append(
+                    '%s (%d)' %
+                    (i, data.tags[tag]['authors'][i]))
+            out.append(
+                '<tr><td>%s</td><td>%s</td><td>%d</td><td>%s</td></tr>' %
+                (tag,
+                 data.tags[tag]['date'],
+                    data.tags[tag]['commits'],
+                    ', '.join(authorinfo)))
         out.append('</table>')
 
-        f.write('\n'.join(out))
-        self.printFooter(f)
-        f.close()
+        out.append('</body></html>')
+        outfile.write('\n'.join(out))
+        outfile.close()
 
-        self.createGraphs(path)
+        self.create_graphs(path)
 
-    def createGraphs(self, path):
+    def create_graphs(self, path):
+        """
+        Build gnuplot graphs.
+        """
         print 'Generating graphs...'
 
         # hour of day
-        f = open(path + '/hour_of_day.plot', 'w')
-        f.write(GNUPLOT_COMMON)
-        f.write(
-"""
+        out = open(path + '/hour_of_day.plot', 'w')
+        out.write(GNUPLOT_COMMON)
+        out.write(
+            """
 set output 'hour_of_day.png'
 unset key
 set xrange [0.5:24.5]
@@ -1198,13 +1298,13 @@ set grid y
 set ylabel "Commits"
 plot 'hour_of_day.dat' using 1:2:(0.5) w boxes fs solid
 """)
-        f.close()
+        out.close()
 
         # day of week
-        f = open(path + '/day_of_week.plot', 'w')
-        f.write(GNUPLOT_COMMON)
-        f.write(
-"""
+        out = open(path + '/day_of_week.plot', 'w')
+        out.write(GNUPLOT_COMMON)
+        out.write(
+            """
 set output 'day_of_week.png'
 unset key
 set xrange [0.5:7.5]
@@ -1213,13 +1313,13 @@ set grid y
 set ylabel "Commits"
 plot 'day_of_week.dat' using 1:3:(0.5):xtic(2) w boxes fs solid
 """)
-        f.close()
+        out.close()
 
         # Domains
-        f = open(path + '/domains.plot', 'w')
-        f.write(GNUPLOT_COMMON)
-        f.write(
-"""
+        out = open(path + '/domains.plot', 'w')
+        out.write(GNUPLOT_COMMON)
+        out.write(
+            """
 set output 'domains.png'
 unset key
 unset xtics
@@ -1228,13 +1328,13 @@ set grid y
 set ylabel "Commits"
 plot 'domains.dat' using 2:3:(0.5) with boxes fs solid, '' using 2:3:1 with labels rotate by 45 offset 0,1
 """)
-        f.close()
+        out.close()
 
         # Month of Year
-        f = open(path + '/month_of_year.plot', 'w')
-        f.write(GNUPLOT_COMMON)
-        f.write(
-"""
+        out = open(path + '/month_of_year.plot', 'w')
+        out.write(GNUPLOT_COMMON)
+        out.write(
+            """
 set output 'month_of_year.png'
 unset key
 set xrange [0.5:12.5]
@@ -1243,13 +1343,13 @@ set grid y
 set ylabel "Commits"
 plot 'month_of_year.dat' using 1:2:(0.5) w boxes fs solid
 """)
-        f.close()
+        out.close()
 
         # commits_by_year_month
-        f = open(path + '/commits_by_year_month.plot', 'w')
-        f.write(GNUPLOT_COMMON)
-        f.write(
-"""
+        out = open(path + '/commits_by_year_month.plot', 'w')
+        out.write(GNUPLOT_COMMON)
+        out.write(
+            """
 set output 'commits_by_year_month.png'
 unset key
 set xdata time
@@ -1261,13 +1361,13 @@ set grid y
 set ylabel "Commits"
 plot 'commits_by_year_month.dat' using 1:2:(0.5) w boxes fs solid
 """)
-        f.close()
+        out.close()
 
         # commits_by_year
-        f = open(path + '/commits_by_year.plot', 'w')
-        f.write(GNUPLOT_COMMON)
-        f.write(
-"""
+        out = open(path + '/commits_by_year.plot', 'w')
+        out.write(GNUPLOT_COMMON)
+        out.write(
+            """
 set output 'commits_by_year.png'
 unset key
 set xtics 1 rotate
@@ -1276,13 +1376,13 @@ set ylabel "Commits"
 set yrange [0:]
 plot 'commits_by_year.dat' using 1:2:(0.5) w boxes fs solid
 """)
-        f.close()
+        out.close()
 
         # Files by date
-        f = open(path + '/files_by_date.plot', 'w')
-        f.write(GNUPLOT_COMMON)
-        f.write(
-"""
+        out = open(path + '/files_by_date.plot', 'w')
+        out.write(GNUPLOT_COMMON)
+        out.write(
+            """
 set output 'files_by_date.png'
 unset key
 set xdata time
@@ -1295,13 +1395,13 @@ set ytics autofreq
 set bmargin 6
 plot 'files_by_date.dat' using 1:2 w steps
 """)
-        f.close()
+        out.close()
 
         # Lines of Code
-        f = open(path + '/lines_of_code.plot', 'w')
-        f.write(GNUPLOT_COMMON)
-        f.write(
-"""
+        out = open(path + '/lines_of_code.plot', 'w')
+        out.write(GNUPLOT_COMMON)
+        out.write(
+            """
 set output 'lines_of_code.png'
 unset key
 set xdata time
@@ -1313,13 +1413,13 @@ set xtics rotate
 set bmargin 6
 plot 'lines_of_code.dat' using 1:2 w lines
 """)
-        f.close()
+        out.close()
 
         # Lines of Code Added per author
-        f = open(path + '/lines_of_code_by_author.plot', 'w')
-        f.write(GNUPLOT_COMMON)
-        f.write(
-"""
+        out = open(path + '/lines_of_code_by_author.plot', 'w')
+        out.write(GNUPLOT_COMMON)
+        out.write(
+            """
 set terminal png transparent size 640,480
 set output 'lines_of_code_by_author.png'
 set key left top
@@ -1331,22 +1431,27 @@ set ylabel "Lines"
 set xtics rotate
 set bmargin 6
 plot """
-)
+        )
         i = 1
         plots = []
-        for a in self.authors_to_plot:
+        for author in self.authors_to_plot:
             i = i + 1
-            plots.append("""'lines_of_code_by_author.dat' using 1:%d title "%s" w lines""" % (i, a.replace("\"", "\\\"")))
-        f.write(", ".join(plots))
-        f.write('\n')
+            plots.append(
+                """'lines_of_code_by_author.dat' using 1:%d title "%s" w lines""" %
+                (i,
+                 author.replace(
+                     "\"",
+                     "\\\"")))
+        out.write(", ".join(plots))
+        out.write('\n')
 
-        f.close()
+        out.close()
 
         # Commits per author
-        f = open(path + '/commits_by_author.plot', 'w')
-        f.write(GNUPLOT_COMMON)
-        f.write(
-"""
+        out = open(path + '/commits_by_author.plot', 'w')
+        out.write(GNUPLOT_COMMON)
+        out.write(
+            """
 set terminal png transparent size 640,480
 set output 'commits_by_author.png'
 set key left top
@@ -1358,27 +1463,35 @@ set ylabel "Commits"
 set xtics rotate
 set bmargin 6
 plot """
-)
+        )
         i = 1
         plots = []
-        for a in self.authors_to_plot:
+        for author in self.authors_to_plot:
             i = i + 1
-            plots.append("""'commits_by_author.dat' using 1:%d title "%s" w lines""" % (i, a.replace("\"", "\\\"")))
-        f.write(", ".join(plots))
-        f.write('\n')
+            plots.append(
+                """'commits_by_author.dat' using 1:%d title "%s" w lines""" %
+                (i,
+                 author.replace(
+                     "\"",
+                     "\\\"")))
+        out.write(", ".join(plots))
+        out.write('\n')
 
-        f.close()
+        out.close()
 
         os.chdir(path)
         files = glob.glob(path + '/*.plot')
-        for f in files:
-            out = getpipeoutput([gnuplot_cmd + ' "%s"' % f])
+        for filename in files:
+            out = getpipeoutput([gnuplot_cmd + ' "%s"' % filename])
             if len(out) > 0:
                 print out
 
-    def printHeader(self, f, title = ''):
-        f.write(
-"""<html>
+    def print_header(self, output):
+        """
+        HTML header
+        """
+        output.write(
+            """<html>
 <head>
     <title>GitStats - {}</title>
     <meta name="generator" content="GitStats {}" />
@@ -1395,8 +1508,11 @@ plot """
     def printFooter(self, f):
         f.write("""</div>\n</div>\n</div>\n</body>\n</html>""")
 
-    def printNav(self):
-        return """
+def print_nav():
+    """
+    Return the HTML for navigation as a string.
+    """
+    return """
 <nav class="navbar navbar-default navbar-fixed-top">
 <div class="container">
 <div class="navbar-header"></div>
@@ -1412,22 +1528,23 @@ plot """
 </nav>
 """
 
+def main(args_orig):
+    """
+    Run gitstats.
+    """
+    optlist, args = getopt.getopt(args_orig, 'c:')
+    for option, val in optlist:
+        if option == '-c':
+            key, value = val.split('=', 1)
+            if key not in conf:
+                raise KeyError('no such key "%s" in config' % key)
+            if isinstance(conf[key], int):
+                conf[key] = int(value)
+            else:
+                conf[key] = value
+    if len(args) < 2:
+        print """
 
-class GitStats:
-    def run(self, args_orig):
-        optlist, args = getopt.getopt(args_orig, 'c:')
-        for o,v in optlist:
-            if o == '-c':
-                key, value = v.split('=', 1)
-                if key not in conf:
-                    raise KeyError('no such key "%s" in config' % key)
-                if isinstance(conf[key], int):
-                    conf[key] = int(value)
-                else:
-                    conf[key] = value
-
-        if len(args) < 2:
-            print """
 Usage: gitstats [options] <gitpath..> <outputpath>
 
 Options:
@@ -1436,47 +1553,43 @@ Options:
 Default config values:
 %s
 """ % conf
-            sys.exit(0)
+        sys.exit(0)
 
-        outputpath = os.path.abspath(args[-1])
-        rundir = os.getcwd()
+    outputpath = os.path.abspath(args[-1])
+    rundir = os.getcwd()
 
-        try:
-            os.makedirs(outputpath)
-        except OSError:
-            pass
-        if not os.path.isdir(outputpath):
-            print 'FATAL: Output path is not a directory or does not exist'
-            sys.exit(1)
+    try:
+        os.makedirs(outputpath)
+    except OSError:
+        pass
+    if not os.path.isdir(outputpath):
+        print 'FATAL: Output path is not a directory or does not exist'
+        sys.exit(1)
 
-        print 'Output path: %s' % outputpath
-        cachefile = os.path.join(tempfile.gettempdir(), 'gitstats.cache')
+    print 'Output path: %s' % outputpath
+    cachefile = os.path.join(tempfile.gettempdir(), 'gitstats.cache')
 
-        data = GitDataCollector()
-        data.loadCache(cachefile)
+    data = GitDataCollector()
+    data.loadCache(cachefile)
 
-        for gitpath in args[0:-1]:
-            print 'Git path: %s' % gitpath
+    for gitpath in args[0:-1]:
+        print 'Git path: %s' % gitpath
 
-            os.chdir(gitpath)
+        os.chdir(gitpath)
 
-            print 'Collecting data...'
-            data.collect(gitpath)
+        print 'Collecting data...'
+        data.collect(gitpath)
 
-        print 'Refining data...'
-        data.saveCache(cachefile)
-        data.refine()
 
-        os.chdir(rundir)
+    print 'Refining data...'
+    data.save_cache(cachefile)
+    data.refine()
 
-        print 'Generating report...'
-        report = HTMLReportCreator()
-        report.create(data, outputpath)
+    os.chdir(rundir)
 
-        time_end = time.time()
-        exectime_internal = time_end - time_start
-        print 'Execution time %.5f secs, %.5f secs (%.2f %%) in external commands)' % (exectime_internal, exectime_external, (100.0 * exectime_external) / exectime_internal)
+    print 'Generating report...'
+    report = HTMLReportCreator(data, outputpath)
+    report.create()
 
-if __name__=='__main__':
-    g = GitStats()
-    g.run(sys.argv[1:])
+if __name__ == '__main__':
+    main(sys.argv[1:])
