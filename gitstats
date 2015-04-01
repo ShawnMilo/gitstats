@@ -56,7 +56,6 @@ def getpipeoutput(cmds):
             x, stdin=prev.stdout, stdout=subprocess.PIPE, shell=True)
         prev = proc
     output = proc.communicate()[0]
-    end = time.time()
     return output.rstrip()
 
 def getkeyssortedbyvalues(authors):
@@ -81,8 +80,10 @@ def getversion():
         ["git rev-parse --short HEAD"]
     ).split('\n')[0]
 
+
 def getgitversion():
     return getpipeoutput(['git --version']).split('\n')[0]
+
 
 def getgnuplotversion():
     return getpipeoutput(['gnuplot --version']).split('\n')[0]
@@ -632,6 +633,7 @@ def html_header(level, text):
     return '\n<h%d><a href="#%s" name="%s">%s</a></h%d>\n\n' % (
         level, name, name, text, level)
 
+
 class HTMLReportCreator(object):
 
     def __init__(self, data, path):
@@ -674,7 +676,7 @@ class HTMLReportCreator(object):
         out = []
         out.append('<h1>GitStats - %s</h1>' % data.projectname)
         out.append(print_nav())
-        out.append('<dl>')
+        out.append('<dl class="dl-horizontal">')
         out.append('<dt>Project name</dt><dd>%s</dd>' % (data.projectname))
         out.append(
             '<dt>Generated</dt><dd>%s (in %d seconds)</dd>' %
@@ -736,7 +738,7 @@ class HTMLReportCreator(object):
             stampcur -= deltaweek
 
         # top row: commits & bar
-        out.append('<table class="noborders"><tr>')
+        out.append('<table class="table tight-table"><tr>')
         for i in range(0, num_weeks):
             commits = 0
             if weeks[i] in data.activity_by_year_week:
@@ -748,11 +750,15 @@ class HTMLReportCreator(object):
                     data.activity_by_year_week[
                         weeks[i]]) / data.activity_by_year_week_peak
             height = max(1, int(200 * percentage))
-            out.append((
+            out.append(
                 '<td style="text-align: center; vertical-align: bottom">'
-                '%d<div style="display: block; background-color: red; '
-                'width: 20px; height: %dpx"></div></td>'
-            ) % (commits, height))
+                '{0}<div style="display: block; '
+                'background-color:  hsl(206, 90%, 50%);'
+                'width: 20px; height: {1}px"></div></td>'.format(
+                    commits, height
+                )
+            )
+
 
         # bottom row: year/week
         out.append('</tr><tr>')
@@ -763,7 +769,7 @@ class HTMLReportCreator(object):
         # Hour of Day
         out.append(html_header(2, 'Hour of Day'))
         hour_of_day = data.getActivityByHourOfDay()
-        out.append('<table><tr><th>Hour</th>')
+        out.append('<table class="table tight-table"><tr><th>Hour</th>')
         for i in range(0, 24):
             out.append('<th>%d</th>' % i)
         out.append('</tr>\n<tr><th>Commits</th>')
@@ -771,13 +777,15 @@ class HTMLReportCreator(object):
         out2 = []
         for i in range(0, 24):
             if i in hour_of_day:
-                red = 127 + \
-                    int((float(hour_of_day[i]) /
-                         data.activity_by_hour_of_day_busiest) *
-                        128)
+                lightness = 100 - int(
+                    (float(hour_of_day[i]) / 
+                        data.activity_by_hour_of_day_busiest) * 50
+                )
                 out.append(
-                    '<td style="background-color: rgb(%d, 0, 0)">%d</td>' %
-                    (red, hour_of_day[i]))
+                    '<td style="background-color: hsl(206, 90%, {0}%)">{1}</td>'.format(
+                        lightness, hour_of_day[i]
+                    )
+                )
                 out2.append('%d %d\n' % (i, hour_of_day[i]))
             else:
                 out.append('<td>0</td>')
@@ -789,15 +797,14 @@ class HTMLReportCreator(object):
         totalcommits = data.get_total_commits()
         for i in range(0, 24):
             if i in hour_of_day:
-                red = 127 + \
-                    int((float(hour_of_day[i]) /
-                         data.activity_by_hour_of_day_busiest) *
-                        128)
+                lightness = 100 - \
+                    int((float(hour_of_day[i]) / 
+                        data.activity_by_hour_of_day_busiest) * 50)
                 out.append(
-                    '<td style="background-color: rgb(%d, 0, 0)">%.2f</td>' %
-                    (red, (100.0 * hour_of_day[i]) / totalcommits))
+                    '<td style="background-color: hsl(206, 90%, {0}%)">{1:.1f}</td>'.format(
+                        lightness, (100.0 * hour_of_day[i]) / totalcommits))
             else:
-                out.append('<td>0.00</td>')
+                out.append('<td>0</td>')
         out.append('</tr></table>')
         out.append('<img src="hour_of_day.png" alt="Hour of Day" />')
         hours_file = open(path + '/hour_of_day.dat', 'w')
@@ -814,7 +821,7 @@ class HTMLReportCreator(object):
         # Day of Week
         out.append(html_header(2, 'Day of Week'))
         day_of_week = data.get_activity_by_dow()
-        out.append('<div class="vtable"><table>')
+        out.append('<table class="table vertical-table">')
         out.append('<tr><th>Day</th><th>Total (%)</th></tr>')
         dow_file = open(path + '/day_of_week.dat', 'w')
         out2 = []
@@ -832,7 +839,7 @@ class HTMLReportCreator(object):
             else:
                 out.append('<td>0</td>')
             out.append('</tr>')
-        out.append('</table></div>')
+        out.append('</table>')
         out.append('<img src="day_of_week.png" alt="Day of Week" />')
         dow_file.write('\n'.join(out2))
         del out2
@@ -840,7 +847,7 @@ class HTMLReportCreator(object):
 
         # Hour of Week
         out.append(html_header(2, 'Hour of Week'))
-        out.append('<table>')
+        out.append('<table class="table square-table">')
 
         out.append('<tr><th>Weekday</th>')
         for hour in range(0, 24):
@@ -856,12 +863,10 @@ class HTMLReportCreator(object):
                     commits = 0
                 if commits != 0:
                     out.append('<td')
-                    red = 127 + \
-                        int((float(commits) /
-                             data.activity_by_hour_of_week_busiest) *
-                            128)
-                    out.append(
-                        ' style="background-color: rgb(%d, 0, 0)"' % red)
+                    lightness = 100 - \
+                        int((float(commits) / 
+                            data.activity_by_hour_of_week_busiest) * 50)
+                    out.append(' style="background-color: hsl(206, 90%%, %d%%)"' % lightness)
                     out.append('>%d</td>' % commits)
                 else:
                     out.append('<td></td>')
@@ -871,7 +876,7 @@ class HTMLReportCreator(object):
 
         # Month of Year
         out.append(html_header(2, 'Month of Year'))
-        out.append('<div class="vtable"><table>')
+        out.append('<table class="table vertical-table">')
         out.append('<tr><th>Month</th><th>Commits (%)</th></tr>')
         moy_file = open(path + '/month_of_year.dat', 'w')
         out2 = []
@@ -886,14 +891,14 @@ class HTMLReportCreator(object):
         moy_file.write('\n'.join(out2))
         del out2
         moy_file.close()
-        out.append('</table></div>')
+        out.append('</table>')
         out.append('<img src="month_of_year.png" alt="Month of Year" />')
 
         # Commits by year/month
         out.append(html_header(2, 'Commits by year/month'))
         out.append(
             (
-                '<div class="vtable"><table><tr><th>Month</th>'
+                '<table class="table vertical-table"><tr><th>Month</th>'
                 '<th>Commits</th></tr>'
             )
         )
@@ -901,7 +906,7 @@ class HTMLReportCreator(object):
             out.append(
                 '<tr><td>%s</td><td>%d</td></tr>' %
                 (yymm, data.commits_by_month[yymm]))
-        out.append('</table></div>')
+        out.append('</table>')
         out.append(
             '<img src="commits_by_year_month.png" alt="Commits by year/month" />')
         cby_file = open(path + '/commits_by_year_month.dat', 'w')
@@ -914,8 +919,9 @@ class HTMLReportCreator(object):
 
         # Commits by year
         out.append(html_header(2, 'Commits by Year'))
+
         out.append(
-            '<div class="vtable"><table><tr><th>Year</th><th>Commits (% of all)</th></tr>')
+            '<table class="table vertical-table"><tr><th>Year</th><th>Commits (% of all)</th></tr>')
         for year in reversed(sorted(data.commits_by_year.keys())):
             out.append(
                 '<tr><td>%s</td><td>%d (%.2f%%)</td></tr>' %
@@ -924,7 +930,7 @@ class HTMLReportCreator(object):
                  (100.0 *
                   data.commits_by_year[year]) /
                     data.get_total_commits()))
-        out.append('</table></div>')
+        out.append('</table>')
         out.append('<img src="commits_by_year.png" alt="Commits by Year" />')
         cby_out = open(path + '/commits_by_year.dat', 'w')
         out2 = []
@@ -936,17 +942,16 @@ class HTMLReportCreator(object):
 
         # Commits by timezone
         out.append(html_header(2, 'Commits by Timezone'))
-        out.append('<table><tr>')
+        out.append('<table class="table"><tr>')
         out.append('<th>Timezone</th><th>Commits</th>')
         max_commits_on_tz = max(data.commits_by_timezone.values())
         for i in sorted(data.commits_by_timezone.keys(), key=lambda n: int(n)):
             commits = data.commits_by_timezone[i]
-            red = 127 + int((float(commits) / max_commits_on_tz) * 128)
+            lightness = 100 - int((float(commits) / max_commits_on_tz) * 50)
             out.append(
-                '<tr><th>%s</th><td style="background-color: rgb(%d, 0, 0)">%d</td></tr>' %
-                (i, red, commits))
-        out.append('</tr></table>')
-
+                '<tr><th>%s</th><td '
+                'style="background-color: hsl(206, 90%%, %d%%)"'
+                '>%d</td></tr>' % (i, lightness, commits))
         out.append('</body></html>')
         outfile.write('\n'.join(out))
         outfile.close()
@@ -963,13 +968,14 @@ class HTMLReportCreator(object):
         # Authors :: List of authors
         out.append(html_header(2, 'List of Authors'))
 
-        out.append('<table class="authors sortable" id="authors">')
+        out.append('<table class="table authors sortable" id="authors">')
         out.append((
             '<tr><th>Author</th><th>Commits (%)</th><th>+ lines</th><th>- '
             'lines</th><th>First commit</th><th>Last commit</th><th '
             'class="unsortable">Age</th><th>Active days</th><th># '
             'by commits</th></tr>'
         ))
+
         for author in data.getAuthors(conf['max_authors']):
             info = data.getAuthorInfo(author)
             out.append((
@@ -995,8 +1001,7 @@ class HTMLReportCreator(object):
             out.append((
                 "<p class='moreauthors'>These didn't make it to "
                 "the top: %s</p>"
-                ) % ', '.join(rest)
-            )
+            ) % ', '.join(rest))
 
         out.append(html_header(2, 'Cumulated Added Lines of Code per Author'))
         out.append(
@@ -1057,7 +1062,7 @@ class HTMLReportCreator(object):
 
         # Authors :: Author of Month
         out.append(html_header(2, 'Author of Month'))
-        out.append('<table class="sortable" id="aom">')
+        out.append('<table class="table sortable" id="aom">')
         out.append(
             '<tr><th>Month</th><th>Author</th><th>Commits (%%)</th><th class="unsortable">Next top %d</th><th>Number of authors</th></tr>' %
             conf['authors_top'])
@@ -1083,7 +1088,7 @@ class HTMLReportCreator(object):
 
         out.append(html_header(2, 'Author of Year'))
         out.append(
-            '<table class="sortable" id="aoy"><tr><th>Year</th><th>Author</th><th>Commits (%%)</th><th class="unsortable">Next top %d</th><th>Number of authors</th></tr>' %
+            '<table class="table sortable" id="aoy"><tr><th>Year</th><th>Author</th><th>Commits (%%)</th><th class="unsortable">Next top %d</th><th>Number of authors</th></tr>' %
             conf['authors_top'])
         for year in reversed(sorted(data.author_of_year.keys())):
             authordict = data.author_of_year[year]
@@ -1108,7 +1113,7 @@ class HTMLReportCreator(object):
         out.append(html_header(2, 'Commits by Domains'))
         domains_by_commits = getkeyssortedbyvaluekey(data.domains, 'commits')
         domains_by_commits.reverse()  # most first
-        out.append('<div class="vtable"><table>')
+        out.append('<table class="table vertical-table">')
         out.append('<tr><th>Domains</th><th>Total (%)</th></tr>')
         domain_file = open(path + '/domains.dat', 'w')
         out2 = []
@@ -1117,13 +1122,15 @@ class HTMLReportCreator(object):
             if i == conf['max_domains']:
                 break
             commits = 0
+
             i += 1
             info = data.get_domain_info(domain)
             out2.append('%s %d %d\n' % (domain, i, info['commits']))
             out.append(
                 '<tr><th>%s</th><td>%d (%.2f%%)</td></tr>' %
                 (domain, info['commits'], (100.0 * info['commits'] / totalcommits)))
-        out.append('</table></div>')
+
+        out.append('</table>')
         out.append('<img src="domains.png" alt="Commits by Domains" />')
         domain_file.write('\n'.join(out2))
         del out2
@@ -1179,7 +1186,7 @@ class HTMLReportCreator(object):
         # Files :: Extensions
         out.append(html_header(2, 'Extensions'))
         out.append(
-            '<table class="sortable" id="ext"><tr><th>Extension</th><th>Files (%)</th><th>Lines (%)</th><th>Lines/file</th></tr>')
+            '<table class="table sortable" id="ext"><tr><th>Extension</th><th>Files (%)</th><th>Lines (%)</th><th>Lines/file</th></tr>')
         for ext in sorted(data.extensions.keys()):
             files = data.extensions[ext]['files']
             lines = data.extensions[ext]['lines']
@@ -1242,9 +1249,11 @@ class HTMLReportCreator(object):
                        (1.0 * data.get_total_commits() / len(data.tags)))
         out.append('</dl>')
 
-        out.append('<table class="tags">')
+        out.append('<table class="table tags">')
         out.append(
-            '<tr><th>Name</th><th>Date</th><th>Commits</th><th>Authors</th></tr>')
+            '<tr><th>Name</th><th>Date</th><th>Commits</th><th>Authors</th></tr>'
+        )
+
         # sort the tags by date desc
         tags_sorted_by_date_desc = map(lambda el: el[1], reversed(
             sorted(map(lambda el: (el[1]['date'], el[0]), data.tags.items()))))
@@ -1482,26 +1491,32 @@ plot """
         HTML header
         """
         output.write(
-            """<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
+            """<html>
 <head>
-    <title>GitStats - %s</title>
-    <link rel="stylesheet" href="%s" type="text/css" />
-    <meta name="generator" content="GitStats %s" />
+    <title>GitStats - {}</title>
+    <meta name="generator" content="GitStats {}" />
+    <link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{}" type="text/css" />
     <script type="text/javascript" src="sortable.js"></script>
 </head>
 <body>
-""" % (self.title, conf['style'], getversion()))
+<div class="container">
+<div class="row">
+<div class="col-sm-10 col-sm-offset-1">
+""".format(self.title, getversion(), conf['style']))
+
+    def printFooter(self, f):
+        f.write("""</div>\n</div>\n</div>\n</body>\n</html>""")
 
 def print_nav():
     """
     Return the HTML for navigation as a string.
     """
-
     return """
-<div class="nav">
-<ul>
+<nav class="navbar navbar-default navbar-fixed-top">
+<div class="container">
+<div class="navbar-header"></div>
+<ul class="nav navbar-nav">
 <li><a href="index.html">General</a></li>
 <li><a href="activity.html">Activity</a></li>
 <li><a href="authors.html">Authors</a></li>
@@ -1510,13 +1525,13 @@ def print_nav():
 <li><a href="tags.html">Tags</a></li>
 </ul>
 </div>
+</nav>
 """
 
 def main(args_orig):
     """
     Run gitstats.
     """
-    print "got here"
     optlist, args = getopt.getopt(args_orig, 'c:')
     for option, val in optlist:
         if option == '-c':
@@ -1527,8 +1542,8 @@ def main(args_orig):
                 conf[key] = int(value)
             else:
                 conf[key] = value
-        if len(args) < 2:
-            print """
+    if len(args) < 2:
+        print """
 
 Usage: gitstats [options] <gitpath..> <outputpath>
 
@@ -1538,7 +1553,7 @@ Options:
 Default config values:
 %s
 """ % conf
-            sys.exit(0)
+        sys.exit(0)
 
     outputpath = os.path.abspath(args[-1])
     rundir = os.getcwd()
