@@ -1,145 +1,42 @@
-/**
- * GitStats - default style
- */
-body {
-	color: black;
-	background-color: #dfd;
+/* @override 
+	file:///Users/scum/Sites/github/gitstats/output/gitstats.css */
+
+
+body { padding-top: 70px; }
+
+.navbar-header{
+	background: url(../gitstats-logo.png) no-repeat;
+	width: 120px;
+	height: 31px;
+	margin-top: 10px;
 }
 
-dt {
-	font-weight: bold;
-	float: left;
-	margin-right: 1em;
+.table.tight-table th,
+.table.tight-table td{
+	padding: 4px 2px;
+	width: 10px;
+	font-size: .8em;
+}
+.table.tight-table td{
+	text-align:center;	
 }
 
-dt:after {
-	content: ': ';
+.table.square-table th,
+.table.square-table td{
+	padding: 4px;
+	width: 20px;
+	font-size: .8em;
 }
 
-dd {
-	display: block;
-	clear: left;
-}
-
-table {
-	border: 1px solid black;
-	border-collapse: collapse;
-	font-size: 80%;
-	margin-bottom: 1em;
-}
-
-table.noborders {
-	border: none;
-}
-
-table.noborders td {
-	border: none;
-}
-
-.vtable {
-	float: right;
-	clear: both;
-}
-
-table.tags td {
-	vertical-align: top;
-}
-
-td {
-	background-color: white;
-}
-
-th {
-	background-color: #ddf;
-}
-
-th a {
-	text-decoration: none;
-}
-
-tr:hover {
-	background-color: #ddf;
-}
-
-td {
-	border: 1px solid black;
-	padding: 0.2em;
-	padding-left: 0.3em;
-	padding-right: 0.2em;
-}
-
-/* Navigation bar; tabbed style */
-.nav {
-	border-bottom: 1px solid black;
-	padding: 0.3em;
-}
-
-.nav ul {
-	list-style-type: none;
-	display: inline;
-	margin: 0;
-	padding: 0;
-}
-
-.nav li {
-	display: inline;
-}
-
-.nav li a {
-	padding: 0.3em;
-	text-decoration: none;
-	color: black;
-	border: 1px solid black;
-	margin: 0.5em;
-	background-color: #ddf;
-}
-
-.nav li a:hover {
-	background-color: #ddd;
-	border-bottom: 1px solid #ddf;
-}
-
-img {
-	border: 1px solid black;
-	padding: 0.5em;
-	background-color: white;
-}
-
-th img {
-	border: 0px;
-	padding: 0px;
-	background-color: #ddf;
-}
-
-h1 a, h2 a {
-	color: black;
-	text-decoration: none;
-}
-
-h1:hover a:after,
-h2:hover a:after {
-	content: '¶';
-	color: #555;
-}
-
-h1 {
-	font-size: x-large;
-}
-
-h2 {
-	background-color: #564;
-	border: 1px solid black;
-	padding-left: 0.5em;
-	padding-right: 0.5em;
-	color: white;
-	font-size: large;
-	clear: both;
-}
-
-h2 a {
+.table.square-table td{
+	text-align:center;
 	color: white;
 }
 
-.moreauthors {
-	font-size: 80%;
+#authors, #aom, #aoy{
+	font-size: .9em; 
+}
+#authors th, #aom th, #aoy th,
+#authors td, #aom td, #aoy td{
+	padding:2px 1px;
 }
