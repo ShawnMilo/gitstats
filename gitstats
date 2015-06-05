@@ -469,7 +469,7 @@ class GitDataCollector(DataCollector):
         # Per-author statistics
 
         # defined for stamp, author only if author commited at this timestamp.
-        self.changes_by_date_by_author = defaultdict(dict)
+        self.auth_chg_by_date = defaultdict(dict)
 
         # Similar to the above, but never use --first-parent
         # (we need to walk through every commit to know who
@@ -523,11 +523,11 @@ class GitDataCollector(DataCollector):
                 self.authors[author]['lines_added'] += inserted
                 self.authors[author]['lines_removed'] += deleted
 
-                if author not in self.changes_by_date_by_author[stamp]:
-                    self.changes_by_date_by_author[stamp][author] = dict()
-                self.changes_by_date_by_author[stamp][author][
+                if author not in self.auth_chg_by_date[stamp]:
+                    self.auth_chg_by_date[stamp][author] = dict()
+                self.auth_chg_by_date[stamp][author][
                     'lines_added'] = self.authors[author]['lines_added']
-                self.changes_by_date_by_author[stamp][author][
+                self.auth_chg_by_date[stamp][author][
                     'commits'] = self.authors[author]['commits']
                 files, inserted, deleted = 0, 0, 0
 
@@ -1069,7 +1069,7 @@ class HTMLReportCreator(object):
 
         lines_by_authors = {}  # cumulated added lines by
         # author. to save memory,
-        # changes_by_date_by_author[stamp][author] is defined
+        # auth_chg_by_date[stamp][author] is defined
         # only at points where author commits.
         # lines_by_authors allows us to generate all the
         # points in the .dat file.
@@ -1082,15 +1082,15 @@ class HTMLReportCreator(object):
         for author in self.authors_to_plot:
             lines_by_authors[author] = 0
             cmt_by_auth[author] = 0
-        for stamp in sorted(data.changes_by_date_by_author.keys()):
+        for stamp in sorted(data.auth_chg_by_date.keys()):
             out_fgl.append('%d' % stamp)
             out_fgc.append('%d' % stamp)
             for author in self.authors_to_plot:
-                if author in data.changes_by_date_by_author[stamp].keys():
-                    lines_by_authors[author] = data.changes_by_date_by_author[
+                if author in data.auth_chg_by_date[stamp].keys():
+                    lines_by_authors[author] = data.auth_chg_by_date[
                         stamp][author]['lines_added']
                     cmt_by_auth[author] = \
-                        data.changes_by_date_by_author[stamp][author]['commits']
+                        data.auth_chg_by_date[stamp][author]['commits']
                 out_fgl.append(' %d' % lines_by_authors[author])
                 out_fgc.append(' %d' % cmt_by_auth[author])
             out_fgl.append('\n')
@@ -1106,17 +1106,24 @@ class HTMLReportCreator(object):
         # Authors :: Author of Month
         out.append(html_header(2, 'Author of Month'))
         out.append('<table class="table sortable" id="aom">')
-        out.append(
-            '<tr><th>Month</th><th>Author</th><th>Commits (%%)</th><th class="unsortable">Next top %d</th><th>Number of authors</th></tr>' %
-            conf['authors_top'])
+        snippet = (
+            '<tr><th>Month</th><th>Author</th><th>Commits (%%)</th>'
+            '<th class="unsortable">Next top %d</th>'
+            '<th>Number of authors</th></tr>'
+        )
+        out.append(snippet % conf['authors_top'])
         for yymm in reversed(sorted(data.author_of_month.keys())):
             authordict = data.author_of_month[yymm]
             authors = getkeyssortedbyvalues(authordict)
             authors.reverse()
             commits = data.author_of_month[yymm][authors[0]]
             next_author = ', '.join(authors[1:conf['authors_top'] + 1])
+            snippet = (
+                '<tr><td>%s</td><td>%s</td><td>%d (%.2f%% of %d)</td>'
+                '<td>%s</td><td>%d</td></tr>'
+            )
             out.append(
-                '<tr><td>%s</td><td>%s</td><td>%d (%.2f%% of %d)</td><td>%s</td><td>%d</td></tr>' %
+                snippet %
                 (yymm,
                  authors[0],
                     commits,
@@ -1130,9 +1137,14 @@ class HTMLReportCreator(object):
         out.append('</table>')
 
         out.append(html_header(2, 'Author of Year'))
+        snippet = (
+            '<table class="table sortable" id="aoy"><tr><th>Year</th>'
+            '<th>Author</th><th>Commits (%%)</th>'
+            '<th class="unsortable">Next top %d</th>'
+            '<th>Number of authors</th></tr>'
+        )
         out.append(
-            '<table class="table sortable" id="aoy"><tr><th>Year</th><th>Author</th><th>Commits (%%)</th><th class="unsortable">Next top %d</th><th>Number of authors</th></tr>' %
-            conf['authors_top'])
+            snippet % conf['authors_top'])
         for year in reversed(sorted(data.author_of_year.keys())):
             authordict = data.author_of_year[year]
             authors = getkeyssortedbyvalues(authordict)
@@ -1140,7 +1152,8 @@ class HTMLReportCreator(object):
             commits = data.author_of_year[year][authors[0]]
             next_author = ', '.join(authors[1:conf['authors_top'] + 1])
             out.append(
-                '<tr><td>%s</td><td>%s</td><td>%d (%.2f%% of %d)</td><td>%s</td><td>%d</td></tr>' %
+                ('<tr><td>%s</td><td>%s</td><td>%d (%.2f%% of %d)</td>'
+                 '<td>%s</td><td>%d</td></tr>') %
                 (year,
                  authors[0],
                     commits,
@@ -1171,7 +1184,11 @@ class HTMLReportCreator(object):
             out2.append('%s %d %d\n' % (domain, i, info['commits']))
             out.append(
                 '<tr><th>%s</th><td>%d (%.2f%%)</td></tr>' %
-                (domain, info['commits'], (100.0 * info['commits'] / totalcommits)))
+                (
+                    domain, info['commits'],
+                    (100.0 * info['commits'] / totalcommits)
+                )
+            )
 
         out.append('</table>')
         out.append('<img src="domains.png" alt="Commits by Domains" />')
@@ -1228,8 +1245,11 @@ class HTMLReportCreator(object):
 
         # Files :: Extensions
         out.append(html_header(2, 'Extensions'))
-        out.append(
-            '<table class="table sortable" id="ext"><tr><th>Extension</th><th>Files (%)</th><th>Lines (%)</th><th>Lines/file</th></tr>')
+        out.append((
+            '<table class="table sortable" id="ext"><tr>'
+            '<th>Extension</th><th>Files (%)</th><th>Lines (%)</th>'
+            '<th>Lines/file</th></tr>'
+        ))
         for ext in sorted(data.extensions.keys()):
             files = data.extensions[ext]['files']
             lines = data.extensions[ext]['lines']
@@ -1240,8 +1260,15 @@ class HTMLReportCreator(object):
                 ext_pct = 0.0
 
             out.append(
-                '<tr><td>%s</td><td>%d (%.2f%%)</td><td>%d (%.2f%%)</td><td>%d</td></tr>' %
-                (ext, files, ext_pct, lines, (100.0 * lines) / data.total_loc(), lines / files))
+                (
+                    '<tr><td>%s</td><td>%d (%.2f%%)</td><td>%d '
+                    '(%.2f%%)</td><td>%d</td></tr>'
+                ) %
+                (
+                    ext, files, ext_pct, lines,
+                    (100.0 * lines) / data.total_loc(), lines / files
+                )
+            )
         out.append('</table>')
 
         out.append('</body></html>')
@@ -1293,9 +1320,10 @@ class HTMLReportCreator(object):
         out.append('</dl>')
 
         out.append('<table class="table tags">')
-        out.append(
-            '<tr><th>Name</th><th>Date</th><th>Commits</th><th>Authors</th></tr>'
-        )
+        out.append((
+            '<tr><th>Name</th><th>Date</th>'
+            '<th>Commits</th><th>Authors</th></tr>'
+        ))
 
         # sort the tags by date desc
         tags_sorted_by_date_desc = map(lambda el: el[1], reversed(
@@ -1369,8 +1397,11 @@ unset xtics
 set yrange [0:]
 set grid y
 set ylabel "Commits"
-plot 'domains.dat' using 2:3:(0.5) with boxes fs solid, '' using 2:3:1 with labels rotate by 45 offset 0,1
 """)
+        out.write((
+            "plot 'domains.dat' using 2:3:(0.5) with boxes fs solid, '' "
+            "using 2:3:1 with labels rotate by 45 offset 0,1\n"
+        ))
         out.close()
 
         # Month of Year
@@ -1480,11 +1511,10 @@ plot """
         for author in self.authors_to_plot:
             i = i + 1
             plots.append(
-                """'lines_of_code_by_author.dat' using 1:%d title "%s" w lines""" %
-                (i,
-                 author.replace(
-                     "\"",
-                     "\\\"")))
+                (
+                    """'lines_of_code_by_author.dat' """
+                    """using 1:%d title "%s" w lines"""
+                ) % (i, author.replace("\"", "\\\"")))
         out.write(", ".join(plots))
         out.write('\n')
 
@@ -1538,7 +1568,8 @@ plot """
 <head>
     <title>GitStats - {}</title>
     <meta name="generator" content="GitStats {}" />
-    <link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href=
+    "http://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="{}" type="text/css" />
     <script type="text/javascript" src="sortable.js"></script>
 </head>
