@@ -692,7 +692,11 @@ class HTMLReportCreator(object):
              time.time() -
              data.getStampCreated()))
         out.append(
-            '<dt>Generator</dt><dd><a href="http://gitstats.sourceforge.net/">GitStats</a> (version %s), %s, %s</dd>' %
+            (
+                '<dt>Generator</dt><dd>'
+                '<a href="http://gitstats.sourceforge.net/">GitStats</a> '
+                '(version %s), %s, %s</dd>'
+            ) %
             (getversion(), getgitversion(), getgnuplotversion()))
         out.append(
             '<dt>Report Period</dt><dd>%s to %s</dd>' %
@@ -728,7 +732,11 @@ class HTMLReportCreator(object):
         )
         out.append(
             '<dt>Authors</dt><dd>%s (average %.1f commits per author)</dd>' %
-            (data.get_total_authors(), (1.0 * data.get_total_commits()) / data.get_total_authors()))
+            (
+                data.get_total_authors(),
+                (1.0 * data.get_total_commits()) / data.get_total_authors()
+            )
+        )
         out.append('</dl>')
 
         out.append('</body>\n</html>')
@@ -800,8 +808,12 @@ class HTMLReportCreator(object):
                     (float(hour_of_day[i]) /
                         data.activity_by_hour_of_day_busiest) * 50
                 )
+                snippet = (
+                    '<td style="background-color: '
+                    'hsl(206, 90%, {0}%)">{1}</td>'
+                )
                 out.append(
-                    '<td style="background-color: hsl(206, 90%, {0}%)">{1}</td>'.format(
+                    snippet.format(
                         lightness, hour_of_day[i]
                     )
                 )
@@ -819,8 +831,12 @@ class HTMLReportCreator(object):
                 lightness = 100 - \
                     int((float(hour_of_day[i]) /
                          data.activity_by_hour_of_day_busiest) * 50)
+                snippet = (
+                    '<td style="background-color: '
+                    'hsl(206, 90%, {0}%)">{1:.1f}</td>'
+                )
                 out.append(
-                    '<td style="background-color: hsl(206, 90%, {0}%)">{1:.1f}</td>'.format(
+                    snippet.format(
                         lightness, (100.0 * hour_of_day[i]) / totalcommits))
             else:
                 out.append('<td>0</td>')
@@ -1060,12 +1076,12 @@ class HTMLReportCreator(object):
 
         # Don't rely on getAuthors to give the same order each
         # time. Be robust and keep the list in a variable.
-        commits_by_authors = {}  # cumulated added lines by
+        cmt_by_auth = {}  # cumulated added lines by
 
         self.authors_to_plot = data.getAuthors(conf['max_authors'])
         for author in self.authors_to_plot:
             lines_by_authors[author] = 0
-            commits_by_authors[author] = 0
+            cmt_by_auth[author] = 0
         for stamp in sorted(data.changes_by_date_by_author.keys()):
             out_fgl.append('%d' % stamp)
             out_fgc.append('%d' % stamp)
@@ -1073,10 +1089,10 @@ class HTMLReportCreator(object):
                 if author in data.changes_by_date_by_author[stamp].keys():
                     lines_by_authors[author] = data.changes_by_date_by_author[
                         stamp][author]['lines_added']
-                    commits_by_authors[author] = data.changes_by_date_by_author[
-                        stamp][author]['commits']
+                    cmt_by_auth[author] = \
+                        data.changes_by_date_by_author[stamp][author]['commits']
                 out_fgl.append(' %d' % lines_by_authors[author])
-                out_fgc.append(' %d' % commits_by_authors[author])
+                out_fgc.append(' %d' % cmt_by_auth[author])
             out_fgl.append('\n')
             out_fgc.append('\n')
 
