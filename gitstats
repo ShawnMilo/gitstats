@@ -805,8 +805,10 @@ class HTMLReportCreator(object):
         for i in range(0, 24):
             if i in hour_of_day:
                 lightness = 100 - int(
-                    (float(hour_of_day[i]) /
-                        data.activity_by_hour_of_day_busiest) * 50
+                    (
+                        float(hour_of_day[i]) /
+                        data.activity_by_hour_of_day_busiest
+                    ) * 50
                 )
                 snippet = (
                     '<td style="background-color: '
@@ -1124,15 +1126,16 @@ class HTMLReportCreator(object):
             )
             out.append(
                 snippet %
-                (yymm,
-                 authors[0],
+                (
+                    yymm,
+                    authors[0],
                     commits,
-                    (100.0 *
-                     commits) /
-                    data.commits_by_month[yymm],
+                    (100.0 * commits) / data.commits_by_month[yymm],
                     data.commits_by_month[yymm],
                     next_author,
-                    len(authors)))
+                    len(authors),
+                )
+            )
 
         out.append('</table>')
 
@@ -1154,15 +1157,17 @@ class HTMLReportCreator(object):
             out.append(
                 ('<tr><td>%s</td><td>%s</td><td>%d (%.2f%% of %d)</td>'
                  '<td>%s</td><td>%d</td></tr>') %
-                (year,
-                 authors[0],
+                (
+                    year,
+                    authors[0],
                     commits,
-                    (100.0 *
-                     commits) /
+                    (100.0 * commits) /
                     data.commits_by_year[year],
                     data.commits_by_year[year],
                     next_author,
-                    len(authors)))
+                    len(authors)
+                )
+            )
         out.append('</table>')
 
         # Domains
@@ -1338,10 +1343,11 @@ class HTMLReportCreator(object):
                     (i, data.tags[tag]['authors'][i]))
             out.append(
                 '<tr><td>%s</td><td>%s</td><td>%d</td><td>%s</td></tr>' %
-                (tag,
-                 data.tags[tag]['date'],
-                    data.tags[tag]['commits'],
-                    ', '.join(authorinfo)))
+                (
+                    tag, data.tags[tag]['date'],
+                    data.tags[tag]['commits'], ', '.join(authorinfo)
+                )
+            )
         out.append('</table>')
 
         out.append('</body></html>')
