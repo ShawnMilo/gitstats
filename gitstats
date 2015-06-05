@@ -700,9 +700,12 @@ class HTMLReportCreator(object):
              data.getLastCommitDate().strftime(date_format)))
         out.append('<dt>Age</dt><dd>%d days, %d active days (%3.2f%%)</dd>' %
                    (
-                       data.get_commit_delta_days(), len(data.get_active_days()), (100.0 *
-                                                                                   len(data.get_active_days()) /
-                                                                                   data.get_commit_delta_days())
+                       data.get_commit_delta_days(),
+                       len(data.get_active_days()),
+                       (
+                           100.0 * len(data.get_active_days()) /
+                           data.get_commit_delta_days()
+                       )
                    ))
         out.append('<dt>Total Files</dt><dd>%s</dd>' % data.get_total_files())
         out.append(
@@ -710,12 +713,19 @@ class HTMLReportCreator(object):
             (data.total_loc(),
              data.total_lines_added,
              data.total_lines_removed))
+        msg = (
+            '<dt>Total Commits</dt><dd>%s '
+            '(average %.1f commits per active day, '
+            '%.1f per all days)</dd>'
+        )
         out.append(
-            '<dt>Total Commits</dt><dd>%s (average %.1f commits per active day, %.1f per all days)</dd>' %
-            (data.get_total_commits(), float(
-                data.get_total_commits()) / len(
-                data.get_active_days()), float(
-                data.get_total_commits()) / data.get_commit_delta_days()))
+            msg %
+            (
+                data.get_total_commits(), float(
+                    data.get_total_commits()) / len(
+                    data.get_active_days()), float(
+                    data.get_total_commits()) / data.get_commit_delta_days())
+        )
         out.append(
             '<dt>Authors</dt><dd>%s (average %.1f commits per author)</dd>' %
             (data.get_total_authors(), (1.0 * data.get_total_commits()) / data.get_total_authors()))
@@ -919,7 +929,9 @@ class HTMLReportCreator(object):
                 (yymm, data.commits_by_month[yymm]))
         out.append('</table>')
         out.append(
-            '<img src="commits_by_year_month.png" alt="Commits by year/month" />')
+            '<img src="commits_by_year_month.png" '
+            'alt="Commits by year/month" />'
+        )
         cby_file = open(path + '/commits_by_year_month.dat', 'w')
         out2 = []
         for yymm in sorted(data.commits_by_month.keys()):
@@ -932,7 +944,9 @@ class HTMLReportCreator(object):
         out.append(html_header(2, 'Commits by Year'))
 
         out.append(
-            '<table class="table vertical-table"><tr><th>Year</th><th>Commits (% of all)</th></tr>')
+            '<table class="table vertical-table"><tr><th>Year</th>'
+            '<th>Commits (% of all)</th></tr>'
+        )
         for year in reversed(sorted(data.commits_by_year.keys())):
             out.append(
                 '<tr><td>%s</td><td>%d (%.2f%%)</td></tr>' %
@@ -1016,7 +1030,9 @@ class HTMLReportCreator(object):
 
         out.append(html_header(2, 'Cumulated Added Lines of Code per Author'))
         out.append(
-            '<img src="lines_of_code_by_author.png" alt="Lines of code per Author" />')
+            '<img src="lines_of_code_by_author.png" '
+            'alt="Lines of code per Author" />'
+        )
         if len(allauthors) > conf['max_authors']:
             out.append(
                 '<p class="moreauthors">Only top %d authors shown</p>' %
