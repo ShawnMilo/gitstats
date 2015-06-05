@@ -42,6 +42,7 @@ conf = {
     'exclude_extensions': 'png,gif,pdf,json,csv,jpg,sh,txt',
 }
 
+
 def getpipeoutput(cmds):
     """
     Accept a series of commands.
@@ -58,19 +59,24 @@ def getpipeoutput(cmds):
     output = proc.communicate()[0]
     return output.rstrip()
 
+
 def getkeyssortedbyvalues(authors):
     recs = [(count, author) for author, count in authors.items()]
     return [x[1] for x in sorted(recs)]
+
 
 def getkeyssortedbyvaluekey(d, key):
     return map(
         lambda el: el[1], sorted(map(lambda el: (d[el][key], el), d.keys())))
 
 # This should be the main function to extract data from the repository.
+
+
 def collect(path):
     if len(conf['project_name']) == 0:
         return os.path.basename(os.path.abspath(path))
     return conf['project_name']
+
 
 def getversion():
     """
@@ -87,6 +93,7 @@ def getgitversion():
 
 def getgnuplotversion():
     return getpipeoutput(['gnuplot --version']).split('\n')[0]
+
 
 class DataCollector(object):
 
@@ -144,7 +151,6 @@ class DataCollector(object):
         # line statistics
         self.changes_by_date = defaultdict(dict)
 
-
     # Load cacheable data
     def loadCache(self, cachefile):
         if not os.path.exists(cachefile):
@@ -168,6 +174,7 @@ class DataCollector(object):
         data = zlib.compress(pickle.dumps(self.cache))
         f.write(data)
         f.close()
+
 
 class GitDataCollector(DataCollector):
 
@@ -405,8 +412,8 @@ class GitDataCollector(DataCollector):
         extra = '--first-parent -m'
 
         lines = getpipeoutput([
-                'git log --numstat %s --pretty=format:"%%at %%aN" HEAD' %
-                (extra)
+            'git log --numstat %s --pretty=format:"%%at %%aN" HEAD' %
+            (extra)
         ]).split('\n')
 
         lines.reverse()
@@ -582,8 +589,8 @@ class GitDataCollector(DataCollector):
         except:
             res = int(
                 getpipeoutput(
-                    ['git ls-tree -r --name-only "%s"' % 
-                    rev, 'wc -l']).split('\n')[0]
+                    ['git ls-tree -r --name-only "%s"' %
+                     rev, 'wc -l']).split('\n')[0]
             )
             if 'files_in_tree' not in self.cache:
                 self.cache['files_in_tree'] = {}
@@ -625,6 +632,7 @@ class GitDataCollector(DataCollector):
     def total_loc(self):
         return self.total_lines
 
+
 def html_header(level, text):
     """
     Return a string for the HTML header.
@@ -659,7 +667,7 @@ class HTMLReportCreator(object):
         secondarypath = os.path.join(binarypath, '..', 'share', 'gitstats')
         basedirs = [binarypath, secondarypath, '/usr/share/gitstats']
         for filename in ('gitstats.css', 'sortable.js',
-                     'arrow-up.gif', 'arrow-down.gif', 'arrow-none.gif'):
+                         'arrow-up.gif', 'arrow-down.gif', 'arrow-none.gif'):
             for base in basedirs:
                 src = os.path.join(base, filename)
                 if os.path.exists(src):
@@ -691,9 +699,11 @@ class HTMLReportCreator(object):
             (data.getFirstCommitDate().strftime(date_format),
              data.getLastCommitDate().strftime(date_format)))
         out.append('<dt>Age</dt><dd>%d days, %d active days (%3.2f%%)</dd>' %
-                   (data.get_commit_delta_days(), len(data.get_active_days()), (100.0 *
-                                                                           len(data.get_active_days()) /
-                                                                           data.get_commit_delta_days())))
+                   (
+                       data.get_commit_delta_days(), len(data.get_active_days()), (100.0 *
+                                                                                   len(data.get_active_days()) /
+                                                                                   data.get_commit_delta_days())
+                   ))
         out.append('<dt>Total Files</dt><dd>%s</dd>' % data.get_total_files())
         out.append(
             '<dt>Total Lines of Code</dt><dd>%s (%d added, %d removed)</dd>' %
@@ -759,7 +769,6 @@ class HTMLReportCreator(object):
                 )
             )
 
-
         # bottom row: year/week
         out.append('</tr><tr>')
         for i in range(0, num_weeks):
@@ -778,7 +787,7 @@ class HTMLReportCreator(object):
         for i in range(0, 24):
             if i in hour_of_day:
                 lightness = 100 - int(
-                    (float(hour_of_day[i]) / 
+                    (float(hour_of_day[i]) /
                         data.activity_by_hour_of_day_busiest) * 50
                 )
                 out.append(
@@ -798,8 +807,8 @@ class HTMLReportCreator(object):
         for i in range(0, 24):
             if i in hour_of_day:
                 lightness = 100 - \
-                    int((float(hour_of_day[i]) / 
-                        data.activity_by_hour_of_day_busiest) * 50)
+                    int((float(hour_of_day[i]) /
+                         data.activity_by_hour_of_day_busiest) * 50)
                 out.append(
                     '<td style="background-color: hsl(206, 90%, {0}%)">{1:.1f}</td>'.format(
                         lightness, (100.0 * hour_of_day[i]) / totalcommits))
@@ -864,9 +873,11 @@ class HTMLReportCreator(object):
                 if commits != 0:
                     out.append('<td')
                     lightness = 100 - \
-                        int((float(commits) / 
-                            data.activity_by_hour_of_week_busiest) * 50)
-                    out.append(' style="background-color: hsl(206, 90%%, %d%%)"' % lightness)
+                        int((float(commits) /
+                             data.activity_by_hour_of_week_busiest) * 50)
+                    out.append(
+                        ' style="background-color: hsl(206, 90%%, %d%%)"' %
+                        lightness)
                     out.append('>%d</td>' % commits)
                 else:
                     out.append('<td></td>')
@@ -1508,6 +1519,7 @@ plot """
     def printFooter(self, f):
         f.write("""</div>\n</div>\n</div>\n</body>\n</html>""")
 
+
 def print_nav():
     """
     Return the HTML for navigation as a string.
@@ -1527,6 +1539,7 @@ def print_nav():
 </div>
 </nav>
 """
+
 
 def main(args_orig):
     """
@@ -1579,7 +1592,6 @@ Default config values:
 
         print 'Collecting data...'
         data.collect(gitpath)
-
 
     print 'Refining data...'
     data.save_cache(cachefile)
