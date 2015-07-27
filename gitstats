@@ -1575,7 +1575,7 @@ plot """
     <title>GitStats - {}</title>
     <meta name="generator" content="GitStats {}" />
     <link rel="stylesheet" href=
-    "http://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap.min.css">
+    "https://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="{}" type="text/css" />
     <script type="text/javascript" src="sortable.js"></script>
 </head>
