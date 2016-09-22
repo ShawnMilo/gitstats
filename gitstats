@@ -39,7 +39,7 @@ conf = {
     'authors_top': 5,
     'linear_linestats': 1,
     'project_name': '',
-    'exclude_extensions': 'png,gif,pdf,json,csv,jpg,sh,txt,xml',
+    'exclude_extensions': 'png,gif,pdf,json,csv,jpg,sh,txt',
     'exclude_directories': 'src/test/',
 }
 
