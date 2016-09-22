@@ -39,7 +39,8 @@ conf = {
     'authors_top': 5,
     'linear_linestats': 1,
     'project_name': '',
-    'exclude_extensions': 'png,gif,pdf,json,csv,jpg,sh,txt',
+    'exclude_extensions': 'png,gif,pdf,json,csv,jpg,sh,txt,xml',
+    'exclude_directories': 'src/test/',
 }
 
 
@@ -388,6 +389,11 @@ class GitDataCollector(DataCollector):
                 continue
 
             sha1, fullpath = line.split()[2:4]
+
+            # skip directories we aren't interested in
+            if len(conf['exclude_directories']):
+                if any(dir in fullpath for dir in conf['exclude_directories'].split(',')):
+                    continue
 
             filename = os.path.basename(fullpath)  # strip directories
 
