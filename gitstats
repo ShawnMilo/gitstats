@@ -40,7 +40,7 @@ conf = {
     'linear_linestats': 1,
     'project_name': '',
     'exclude_extensions': ('png','gif','pdf','json','csv','jpg','sh','txt'),
-    'exclude_directories': (),  # tuple of paths or path prefixes
+    'exclude_directories': tuple(),  # full or partial paths
 }
 
 
