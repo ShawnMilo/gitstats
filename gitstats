@@ -39,7 +39,8 @@ conf = {
     'authors_top': 5,
     'linear_linestats': 1,
     'project_name': '',
-    'exclude_extensions': 'png,gif,pdf,json,csv,jpg,sh,txt',
+    'exclude_extensions': ('png','gif','pdf','json','csv','jpg','sh','txt'),
+    'exclude_directories': (),  # tuple of paths or path prefixes
 }
 
 
@@ -389,6 +390,10 @@ class GitDataCollector(DataCollector):
 
             sha1, fullpath = line.split()[2:4]
 
+            # skip directories we aren't interested in
+            if fullpath.startswith(conf['exclude_directories']):
+                continue
+
             filename = os.path.basename(fullpath)  # strip directories
 
             try:
@@ -397,9 +402,8 @@ class GitDataCollector(DataCollector):
                 ext = ''
 
             # skip extensions we aren't interested in
-            if len(ext) and len(conf['exclude_extensions']):
-                if ext in conf['exclude_extensions'].split(','):
-                    continue
+            if ext.startswith(conf['exclude_extensions']):
+                continue
 
             self.extensions[ext]['files'] += 1
             try:
@@ -446,9 +450,8 @@ class GitDataCollector(DataCollector):
                     ext = ''
 
                 # ignore files we don't care about
-                if len(ext) and len(conf['exclude_extensions']):
-                    if ext in conf['exclude_extensions'].split(','):
-                        continue
+                if ext.startswith(conf['exclude_extensions']):
+                    continue
 
                 total_lines += inserted
                 total_lines -= deleted
@@ -504,9 +507,8 @@ class GitDataCollector(DataCollector):
                     ext = ''
 
                 # ignore files we don't care about
-                if len(ext) and len(conf['exclude_extensions']):
-                    if ext in conf['exclude_extensions'].split(','):
-                        continue
+                if ext.startswith(conf['exclude_extensions']):
+                    continue
 
                 files += 1
 
